@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>LVGL Previewer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Header */
+    #header {
+      height: 48px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    #header .logo {
+      font-size: 14px;
+      font-weight: 600;
+      color: #58a6ff;
+    }
+    #header .project-name {
+      font-size: 12px;
+      color: #8b949e;
+      padding: 2px 8px;
+      background: #21262d;
+      border-radius: 4px;
+    }
+    #header .spacer { flex: 1; }
+    .btn {
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #c9d1d9;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #30363d; }
+    .btn.primary {
+      background: #238636;
+      border-color: #238636;
+      color: #fff;
+    }
+    .btn.primary:hover { background: #2ea043; }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Main layout */
+    #main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Left sidebar - File tree */
+    #file-panel {
+      width: 240px;
+      background: #161b22;
+      border-right: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .panel-header {
+      padding: 10px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #30363d;
+    }
+    #file-tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    #file-tree::-webkit-scrollbar {
+      width: 8px;
+    }
+    #file-tree::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #file-tree::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 4px;
+    }
+    #file-tree.show-scrollbar::-webkit-scrollbar-thumb {
+      background: #484f58;
+    }
+    #file-tree.show-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #6e7681;
+    }
+    .tree-section {
+      margin-bottom: 4px;
+    }
+    .tree-label {
+      padding: 6px 12px;
+      font-size: 11px;
+      color: #6e7681;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .tree-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px 6px 20px;
+      font-size: 12px;
+      color: #c9d1d9;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      transition: all 0.1s;
+    }
+    .tree-item:hover {
+      background: #1c2128;
+    }
+    .tree-item.active {
+      background: #1c2128;
+      border-left-color: #58a6ff;
+      color: #58a6ff;
+    }
+    .tree-item .icon {
+      font-size: 10px;
+      opacity: 0.6;
+    }
+    .tree-item.modified::after {
+      content: '●';
+      color: #d29922;
+      margin-left: auto;
+      font-size: 8px;
+    }
+
+    /* Center panel - Preview */
+    #preview-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0d1117;
+      min-width: 320px;
+    }
+    #preview-toolbar {
+      height: 36px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+    }
+    #preview-toolbar .screen-select {
+      font-size: 12px;
+      padding: 4px 8px;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      color: #c9d1d9;
+    }
+    #canvas-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      gap: 12px;
+      overflow: auto;
+    }
+    #canvas-area::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    #canvas-area::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #canvas-area::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 4px;
+    }
+    #canvas-area.show-scrollbar::-webkit-scrollbar-thumb {
+      background: #484f58;
+    }
+    #canvas-area.show-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #6e7681;
+    }
+    #canvas-area::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    #canvas-wrap {
+      position: relative;
+      box-shadow: 0 0 0 1px #30363d, 0 8px 32px rgba(0,0,0,0.6);
+      border-radius: 4px;
+      transform-origin: center center;
+      transition: transform 0.1s ease-out;
+    }
+    #canvas-wrap.zooming {
+      transition: none;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      border-radius: 4px;
+      background: #000;
+    }
+    #canvas-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(13,17,23,0.9);
+      font-size: 13px;
+      color: #8b949e;
+      border-radius: 4px;
+    }
+    #canvas-size {
+      font-size: 11px;
+      color: #6e7681;
+    }
+
+    /* Right panel - Editor */
+    #editor-panel {
+      width: 400px;
+      background: #161b22;
+      border-left: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    #editor-toolbar {
+      height: 36px;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      gap: 8px;
+    }
+    #current-file {
+      flex: 1;
+      font-size: 12px;
+      color: #c9d1d9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #editor {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #editor {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #0d1117;
+    }
+    .cm-editor {
+      flex: 1;
+      overflow: hidden;
+    }
+    .cm-editor.cm-focused {
+      outline: none;
+    }
+    .cm-scroller {
+      font-family: 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace !important;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .cm-scroller::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .cm-scroller::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .cm-scroller::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 4px;
+    }
+    .cm-scroller.show-scrollbar::-webkit-scrollbar-thumb {
+      background: #484f58;
+    }
+    .cm-scroller.show-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #6e7681;
+    }
+    .cm-scroller::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+    /* Dark theme overrides */
+    .cm-gutters {
+      background: #161b22 !important;
+      border-right: 1px solid #30363d !important;
+    }
+    .cm-lineNumbers {
+      color: #6e7681 !important;
+    }
+    .cm-activeLineGutter {
+      background: #21262d !important;
+    }
+    .cm-activeLine {
+      background: #161b22 !important;
+    }
+    .cm-selectionBackground {
+      background: #264f78 !important;
+    }
+    .cm-cursor {
+      border-left-color: #58a6ff !important;
+    }
+
+    /* Log panel */
+    #log-panel {
+      height: 120px;
+      background: #0d1117;
+      border-top: 1px solid #30363d;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    #log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 12px;
+      border-bottom: 1px solid #21262d;
+      background: #161b22;
+    }
+    #log-header span {
+      font-size: 10px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+    }
+    #log-clear {
+      font-size: 10px;
+      color: #8b949e;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    #log-clear:hover { color: #c9d1d9; }
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-family: 'Fira Code', monospace;
+      color: #8b949e;
+    }
+    #log::-webkit-scrollbar {
+      width: 8px;
+    }
+    #log::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #log::-webkit-scrollbar-thumb {
+      background: transparent;
+      border-radius: 4px;
+    }
+    #log.show-scrollbar::-webkit-scrollbar-thumb {
+      background: #484f58;
+    }
+    #log.show-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #6e7681;
+    }
+    #log .line { line-height: 1.6; white-space: pre-wrap; }
+    #log .ok { color: #3fb950; }
+    #log .err { color: #f85149; }
+    #log .warn { color: #d29922; }
+    #log .info { color: #58a6ff; }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <span class="logo">◆ LVGL Previewer</span>
+    <span class="project-name" id="project-title">Loading...</span>
+    <span class="spacer"></span>
+    <button class="btn" onclick="compileProject()" id="compile-btn">Compile</button>
+    <button class="btn primary" onclick="saveCurrentFile()" id="save-btn">Save</button>
+  </div>
+
+  <div id="main">
+    <!-- Left: File tree -->
+    <div id="file-panel">
+      <div class="panel-header">Explorer</div>
+      <div id="file-tree"></div>
+    </div>
+
+    <!-- Center: Preview -->
+    <div id="preview-panel">
+      <div id="preview-toolbar">
+        <select class="screen-select" id="screen-select" onchange="loadScreen(this.value)">
+          <option>Loading screens...</option>
+        </select>
+        <span class="spacer"></span>
+        <span id="zoom-level" style="font-size:11px;color:#8b949e;min-width:45px;text-align:center;">100%</span>
+        <button class="btn" onclick="zoomOut()">−</button>
+        <button class="btn" onclick="resetZoom()">Reset</button>
+        <button class="btn" onclick="zoomIn()">+</button>
+        <button class="btn" onclick="refreshPreview()">Refresh</button>
+      </div>
+      <div id="canvas-area">
+        <div id="canvas-wrap">
+          <canvas id="canvas" width="320" height="240"></canvas>
+          <div id="canvas-overlay">Initializing...</div>
+        </div>
+        <div id="canvas-size">320 × 240</div>
+      </div>
+    </div>
+
+    <!-- Right: XML Editor -->
+    <div id="editor-panel">
+      <div id="editor-toolbar">
+        <span id="current-file">Select a file to edit</span>
+      </div>
+      <div id="editor"></div>
+    </div>
+  </div>
+
+  <!-- Bottom: Log -->
+  <div id="log-panel">
+    <div id="log-header">
+      <span>Console</span>
+      <button id="log-clear" onclick="clearLog()">Clear</button>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "@codemirror/view": "./node_modules/@codemirror/view/dist/index.js?v=3",
+      "@codemirror/state": "./node_modules/@codemirror/state/dist/index.js?v=3",
+      "@codemirror/lang-xml": "./node_modules/@codemirror/lang-xml/dist/index.js?v=3",
+      "@codemirror/theme-one-dark": "./node_modules/@codemirror/theme-one-dark/dist/index.js?v=3",
+      "@codemirror/commands": "./node_modules/@codemirror/commands/dist/index.js?v=3",
+      "@codemirror/language": "./node_modules/@codemirror/language/dist/index.js?v=3",
+      "@lezer/common": "./node_modules/@lezer/common/dist/index.js?v=3",
+      "@lezer/xml": "./node_modules/@lezer/xml/dist/index.js?v=3",
+      "@lezer/lr": "./node_modules/@lezer/lr/dist/index.js?v=3",
+      "@lezer/highlight": "./node_modules/@lezer/highlight/dist/index.js?v=3",
+      "style-mod": "./node_modules/style-mod/src/style-mod.js?v=3",
+      "w3c-keyname": "./node_modules/w3c-keyname/index.js?v=3",
+      "crelt": "./node_modules/crelt/index.js?v=3",
+      "@marijn/find-cluster-break": "./node_modules/@marijn/find-cluster-break/src/index.js?v=3"
+    },
+        "scopes": {
+      "./node_modules/": {
+        "@codemirror/view": "./node_modules/@codemirror/view/dist/index.js?v=3",
+        "@codemirror/state": "./node_modules/@codemirror/state/dist/index.js?v=3",
+        "@codemirror/commands": "./node_modules/@codemirror/commands/dist/index.js?v=3",
+        "@codemirror/language": "./node_modules/@codemirror/language/dist/index.js?v=3",
+        "@codemirror/autocomplete": "./node_modules/@codemirror/autocomplete/dist/index.js?v=3",
+        "@lezer/common": "./node_modules/@lezer/common/dist/index.js?v=3",
+        "@lezer/lr": "./node_modules/@lezer/lr/dist/index.js?v=3",
+        "@lezer/highlight": "./node_modules/@lezer/highlight/dist/index.js?v=3",
+        "style-mod": "./node_modules/style-mod/src/style-mod.js?v=3",
+        "w3c-keyname": "./node_modules/w3c-keyname/index.js?v=3",
+        "crelt": "./node_modules/crelt/index.js?v=3",
+        "@marijn/find-cluster-break": "./node_modules/@marijn/find-cluster-break/src/index.js?v=3"
+      }
+    }
+  }
+  </script>
+  <script type="module">
+    // Cache-busting reload: Ctrl+Shift+R or Cmd+Shift+R
+    import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightActiveLine } from '@codemirror/view';
+    import { EditorState } from '@codemirror/state';
+    import { xml } from '@codemirror/lang-xml';
+    import { oneDark } from '@codemirror/theme-one-dark';
+    import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+    import { bracketMatching } from '@codemirror/language';
+
+    // Global state
+    let Module = null;
+    let runtimeReady = false;
+    let PROJECT_PATH = '';
+    let PROJECT_NAME = 'project';
+    let PROJECT_WIDTH = 320;
+    let PROJECT_HEIGHT = 240;
+
+    // File management
+    let fileCache = {}; // path -> content
+    let modifiedFiles = new Set(); // paths that have been modified
+    let currentFilePath = null;
+
+    // CodeMirror editor
+    let cmEditor = null;
+    let isUpdatingEditor = false;
+
+    // Globals for XML processing
+    let GLOBALS = {};
+    let IMAGES = {};
+
+    // Initialize
+    const urlParams = new URLSearchParams(window.location.search);
+    PROJECT_PATH = urlParams.get('project') || '';
+
+    // Create CodeMirror editor
+    function createEditor() {
+      const parent = document.getElementById('editor');
+      if (!parent) return null;
+
+      const updateListener = EditorView.updateListener.of((update) => {
+        if (update.docChanged && !isUpdatingEditor && currentFilePath) {
+          onEditorChange();
+        }
+      });
+
+      const editor = new EditorView({
+        parent: parent,
+        state: EditorState.create({
+          doc: '',
+          extensions: [
+            lineNumbers(),
+            highlightActiveLineGutter(),
+            highlightActiveLine(),
+            history(),
+            bracketMatching(),
+            xml(),
+            oneDark,
+            keymap.of([...defaultKeymap, ...historyKeymap]),
+            updateListener,
+            EditorView.theme({
+              '&': {
+                backgroundColor: '#0d1117',
+                height: '100%'
+              },
+              '.cm-content': {
+                padding: '12px 0'
+              },
+              '.cm-line': {
+                padding: '0 12px'
+              }
+            }),
+            EditorState.tabSize.of(2)
+          ]
+        })
+      });
+
+      // Setup scrollbar visibility for CodeMirror scroller
+      const scroller = editor.dom.querySelector('.cm-scroller');
+      if (scroller) {
+        scroller.addEventListener('mouseenter', () => {
+          scroller.classList.add('show-scrollbar');
+        });
+        scroller.addEventListener('mouseleave', () => {
+          scroller.classList.remove('show-scrollbar');
+        });
+      }
+
+      return editor;
+    }
+
+    // Scrollbar visibility handling
+    function setupScrollbars() {
+      const elements = [
+        { id: 'file-tree', name: 'File tree' },
+        { id: 'canvas-area', name: 'Canvas area' },
+        { id: 'log', name: 'Log' }
+      ];
+
+      elements.forEach(({ id }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        el.addEventListener('mouseenter', () => {
+          el.classList.add('show-scrollbar');
+        });
+
+        el.addEventListener('mouseleave', () => {
+          el.classList.remove('show-scrollbar');
+        });
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      cmEditor = createEditor();
+      setupScrollbars();
+
+      if (!PROJECT_PATH) {
+        showError('No project path specified');
+        return;
+      }
+
+      await initProject();
+    });
+
+    async function initProject() {
+      log(`Loading project: ${PROJECT_PATH}`, 'info');
+
+      // Load project.xml
+      try {
+        const proj = await fetchText('project.xml');
+        const wm = proj.match(/width="(\d+)"/);
+        const hm = proj.match(/height="(\d+)"/);
+        const nm = proj.match(/name="([^"]+)"/);
+        if (wm) PROJECT_WIDTH = parseInt(wm[1]);
+        if (hm) PROJECT_HEIGHT = parseInt(hm[1]);
+        if (nm) PROJECT_NAME = nm[1];
+      } catch(e) {
+        log('project.xml not found, using defaults', 'warn');
+      }
+
+      document.getElementById('project-title').textContent = PROJECT_NAME;
+      document.getElementById('canvas-size').textContent = `${PROJECT_WIDTH} × ${PROJECT_HEIGHT}`;
+      document.getElementById('canvas').width = PROJECT_WIDTH;
+      document.getElementById('canvas').height = PROJECT_HEIGHT;
+
+      log(`Project: ${PROJECT_NAME} (${PROJECT_WIDTH}×${PROJECT_HEIGHT})`, 'info');
+
+      // Build file tree
+      await buildFileTree();
+
+      // Load globals
+      await loadGlobals();
+
+      // Initialize WASM
+      await initWASM();
+    }
+
+    async function buildFileTree() {
+      const tree = document.getElementById('file-tree');
+      tree.innerHTML = '';
+
+      // Screens section
+      const screensSection = document.createElement('div');
+      screensSection.className = 'tree-section';
+      screensSection.innerHTML = '<div class="tree-label">Screens</div>';
+
+      const screenSelect = document.getElementById('screen-select');
+      screenSelect.innerHTML = '';
+
+      try {
+        const screens = await fetchJson('screens');
+        for (const name of screens) {
+          // Add to tree
+          const item = document.createElement('div');
+          item.className = 'tree-item';
+          item.dataset.path = `screens/${name}.xml`;
+          item.innerHTML = `<span class="icon">▣</span>${name}.xml`;
+          item.onclick = () => openFile(item.dataset.path);
+          screensSection.appendChild(item);
+
+          // Add to screen selector
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          screenSelect.appendChild(opt);
+        }
+      } catch(e) {}
+      tree.appendChild(screensSection);
+
+      // Components section
+      const compsSection = document.createElement('div');
+      compsSection.className = 'tree-section';
+      compsSection.innerHTML = '<div class="tree-label">Components</div>';
+
+      try {
+        const comps = await fetchJson('components');
+        for (const comp of comps) {
+          const item = document.createElement('div');
+          item.className = 'tree-item';
+          item.dataset.path = comp.path;
+          item.innerHTML = `<span class="icon">◈</span>${comp.name}.xml`;
+          item.onclick = () => openFile(item.dataset.path);
+          compsSection.appendChild(item);
+        }
+      } catch(e) {}
+      tree.appendChild(compsSection);
+
+      // Globals section
+      const globalsSection = document.createElement('div');
+      globalsSection.className = 'tree-section';
+      globalsSection.innerHTML = '<div class="tree-label">Configuration</div>';
+
+      const globalsItem = document.createElement('div');
+      globalsItem.className = 'tree-item';
+      globalsItem.dataset.path = 'globals.xml';
+      globalsItem.innerHTML = `<span class="icon">⚙</span>globals.xml`;
+      globalsItem.onclick = () => openFile('globals.xml');
+      globalsSection.appendChild(globalsItem);
+
+      const projectItem = document.createElement('div');
+      projectItem.className = 'tree-item';
+      projectItem.dataset.path = 'project.xml';
+      projectItem.innerHTML = `<span class="icon">⚙</span>project.xml`;
+      projectItem.onclick = () => openFile('project.xml');
+      globalsSection.appendChild(projectItem);
+
+      tree.appendChild(globalsSection);
+    }
+
+    async function openFile(filePath) {
+      // Check if modified
+      if (modifiedFiles.has(currentFilePath)) {
+        if (!confirm('You have unsaved changes. Discard them?')) {
+          return;
+        }
+      }
+
+      // Update UI
+      document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+      document.querySelector(`.tree-item[data-path="${filePath}"]`)?.classList.add('active');
+
+      currentFilePath = filePath;
+      document.getElementById('current-file').textContent = filePath;
+
+      // Load content
+      let content = fileCache[filePath];
+      if (content === undefined) {
+        try {
+          content = await fetchText(filePath);
+          fileCache[filePath] = content;
+        } catch(e) {
+          log(`Failed to load ${filePath}: ${e.message}`, 'err');
+          return;
+        }
+      }
+
+      // Update CodeMirror editor
+      if (cmEditor) {
+        isUpdatingEditor = true;
+        cmEditor.dispatch({
+          changes: { from: 0, to: cmEditor.state.doc.length, insert: content }
+        });
+        isUpdatingEditor = false;
+      }
+
+      // Update modified indicator
+      updateModifiedIndicator();
+
+      // Auto-preview the file
+      await previewXmlFile(filePath);
+    }
+
+    function onEditorChange() {
+      if (!currentFilePath || !cmEditor) return;
+
+      const original = fileCache[currentFilePath];
+      const current = cmEditor.state.doc.toString();
+
+      if (original !== current) {
+        modifiedFiles.add(currentFilePath);
+      } else {
+        modifiedFiles.delete(currentFilePath);
+      }
+
+      updateModifiedIndicator();
+    }
+
+    function updateModifiedIndicator() {
+      document.querySelectorAll('.tree-item').forEach(el => {
+        const path = el.dataset.path;
+        el.classList.toggle('modified', modifiedFiles.has(path));
+      });
+
+      document.getElementById('save-btn').textContent =
+        modifiedFiles.size > 0 ? `Save (${modifiedFiles.size})` : 'Save';
+    }
+
+    async function saveCurrentFile() {
+      if (!currentFilePath || !modifiedFiles.has(currentFilePath) || !cmEditor) {
+        return;
+      }
+
+      const content = cmEditor.state.doc.toString();
+
+      try {
+        const response = await fetch('/api/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project: PROJECT_PATH,
+            path: currentFilePath,
+            content: content
+          })
+        });
+
+        if (response.ok) {
+          fileCache[currentFilePath] = content;
+          modifiedFiles.delete(currentFilePath);
+          updateModifiedIndicator();
+          log(`Saved ${currentFilePath}`, 'ok');
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch(e) {
+        log(`Failed to save ${currentFilePath}: ${e.message}`, 'err');
+      }
+    }
+
+    // XML Processing
+    function parseAttr(tag, attr) {
+      const m = tag.match(new RegExp(`${attr}="([^"]+)"`));
+      return m ? m[1] : null;
+    }
+
+    async function loadGlobals() {
+      try {
+        const text = await fetchText('globals.xml');
+        fileCache['globals.xml'] = text;
+
+        for (const m of text.matchAll(/<(color|int|px)\s[^>]*\/>/g)) {
+          const name = parseAttr(m[0], 'name');
+          const val = parseAttr(m[0], 'value');
+          if (name && val) GLOBALS[name] = val;
+        }
+
+        for (const m of text.matchAll(/<(?:data|file)\s[^>]*\/>/g)) {
+          const name = parseAttr(m[0], 'name');
+          const src = parseAttr(m[0], 'src_path');
+          if (name && src) IMAGES[name] = 'A:' + src;
+        }
+
+        log(`Globals loaded: ${Object.keys(GLOBALS).length} consts, ${Object.keys(IMAGES).length} images`, 'ok');
+      } catch(e) {
+        log('globals.xml load error: ' + e.message, 'warn');
+      }
+    }
+
+    function applyGlobals(xml) {
+      xml = xml.replace(/#([a-zA-Z_][a-zA-Z0-9_]*)/g, (match, name) =>
+        GLOBALS[name] !== undefined ? GLOBALS[name] : match
+      );
+      return xml;
+    }
+
+    // WASM Initialization
+    async function initWASM() {
+      setOverlay('Loading WASM runtime...');
+
+      try {
+        const canvas = document.getElementById('canvas');
+        Module = await createModule({
+          canvas,
+          locateFile: f => 'preview-bin/' + f,
+          print: msg => { if (msg.includes('[Warn]')) log(msg, 'warn'); else log(msg); },
+          printErr: msg => log(msg, 'warn'),
+        });
+        log('WASM loaded', 'ok');
+      } catch(e) {
+        setOverlay('WASM failed: ' + e.message);
+        log('WASM error: ' + e.message, 'err');
+        return;
+      }
+
+      // Setup filesystem
+      setOverlay('Setting up filesystem...');
+      try {
+        await setupFilesystem();
+        log('Filesystem ready', 'ok');
+      } catch(e) {
+        log('FS error: ' + e.message, 'warn');
+      }
+
+      // Initialize LVGL
+      setOverlay('Initializing LVGL...');
+      try {
+        const ret = Module.ccall('lvrt_initialize', 'number', ['string'], ['#canvas']);
+        if (ret !== 0) throw new Error('lvrt_initialize returned ' + ret);
+        log('LVGL initialized', 'ok');
+      } catch(e) {
+        setOverlay('Init failed');
+        log('Init error: ' + e.message, 'err');
+        return;
+      }
+
+      // Project init
+      const initFn = PROJECT_NAME.replace(/-/g, '_') + '_init';
+      try {
+        Module.ccall(initFn, 'void', ['string'], ['A:']);
+        log(`${initFn}('A:') done`, 'ok');
+      } catch(e) {
+        log(`${initFn}: ${e.message}`, 'warn');
+      }
+
+      // Load globals via WASM
+      try {
+        let globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
+        globalsXml = globalsXml.replace(/<!--[\s\S]*?-->/g, '');
+        globalsXml = globalsXml.replace(/src_path="([^"]*)"/g, 'src_path="A:$1"');
+        globalsXml = globalsXml.replace(/<data(\b[^>]*)>/g, '<file$1>');
+        globalsXml = globalsXml.replace(/<\/data>/g, '</file>');
+        globalsXml = globalsXml.replace(/(<globals[^>]*>)/, '$1\n<view/>');
+        Module.ccall('lvrt_xml_load_component_data', 'number', ['string', 'string'], ['globals', globalsXml]);
+        log('Globals registered', 'ok');
+      } catch(e) {
+        log('Globals WASM error: ' + e.message, 'warn');
+      }
+
+      runtimeReady = true;
+      setOverlay(null);
+
+      // Load first screen
+      const firstScreen = document.getElementById('screen-select').value;
+      if (firstScreen) loadScreen(firstScreen);
+    }
+
+    async function setupFilesystem() {
+      // Write globals
+      const globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
+      fsWriteText('/globals.xml', globalsXml);
+
+      // Write components
+      const comps = await fetchJson('components');
+      for (const comp of comps) {
+        const xml = fileCache[comp.path] || await fetchText(comp.path);
+        fsWriteText('/' + comp.path, xml);
+      }
+
+      // Write screens
+      const screens = await fetchJson('screens');
+      for (const name of screens) {
+        const path = `screens/${name}.xml`;
+        const xml = fileCache[path] || await fetchText(path);
+        fsWriteText('/' + path, xml);
+      }
+
+      // Write assets
+      const assets = await fetchJson('assets');
+      for (const a of assets) {
+        const data = await fetchBinary(a.path);
+        fsWriteBinary('/' + a.path, data);
+        fsWriteBinary('A:' + a.path, data);
+      }
+    }
+
+    // Preview
+    async function previewXmlFile(filePath) {
+      if (!runtimeReady) return;
+
+      const isScreen = filePath.startsWith('screens/');
+      const isComponent = filePath.startsWith('components/');
+      const isGlobals = filePath === 'globals.xml';
+
+      if (isGlobals) {
+        // Reload globals
+        try {
+          let globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
+          globalsXml = globalsXml.replace(/\u003c!--[\s\S]*?--\u003e/g, '');
+          globalsXml = globalsXml.replace(/src_path="([^"]*)"/g, 'src_path="A:$1"');
+          globalsXml = globalsXml.replace(/\u003cdata(\b[^\u003e]*)\u003e/g, '\u003cfile$1\u003e');
+          globalsXml = globalsXml.replace(/\u003c\/data\u003e/g, '\u003c/file\u003e');
+          globalsXml = globalsXml.replace(/(\u003cglobals[^\u003e]*\u003e)/, '$1\n\u003cview/\u003e');
+          Module.ccall('lvrt_xml_load_component_data', 'number', ['string', 'string'], ['globals', globalsXml]);
+          log('Globals reloaded', 'ok');
+        } catch(e) {
+          log('Globals reload error: ' + e.message, 'warn');
+        }
+        return;
+      }
+
+      setOverlay(`Loading ${filePath}...`);
+      log(`\n── Loading: ${filePath} ──`, 'info');
+
+      try {
+        // Register all components first
+        const comps = await fetchJson('components');
+        for (const comp of comps) {
+          const xml = applyGlobals(fileCache[comp.path] || await fetchText(comp.path));
+          Module.ccall('lvrt_xml_load_component_data', 'number',
+            ['string', 'string'], [comp.name, xml]);
+        }
+
+        let xmlToRender = fileCache[filePath] || await fetchText(filePath);
+        xmlToRender = applyGlobals(xmlToRender);
+
+        let ret;
+        if (isScreen) {
+          // Screen: use lvrt_process_data
+          const name = filePath.replace('screens/', '').replace('.xml', '');
+          ret = Module.ccall('lvrt_process_data', 'number',
+            ['string', 'string', 'number', 'string', 'string'],
+            [xmlToRender, name, 0, 'screen', '']);
+        } else if (isComponent) {
+          // Component: wrap it and register, then render
+          const compName = filePath.replace('components/', '').replace(/\//g, '_').replace('.xml', '');
+
+          // Register the component
+          Module.ccall('lvrt_xml_load_component_data', 'number',
+            ['string', 'string'], [compName, xmlToRender]);
+
+          // Create a preview wrapper that uses the component
+          const previewXml = `\u003cview\u003e\n  \u003c${compName} width="100%" height="100%" /\u003e\n\u003c/view\u003e`;
+
+          ret = Module.ccall('lvrt_process_data', 'number',
+            ['string', 'string', 'number', 'string', 'string'],
+            [previewXml, 'preview', 0, 'screen', '']);
+        }
+
+        if (ret === 0) {
+          setOverlay(null);
+          log(`Rendered: ${filePath}`, 'ok');
+        } else {
+          setOverlay(`Render error: ${ret}`);
+          log(`Render error: ${ret}`, 'err');
+        }
+      } catch(e) {
+        setOverlay('Error: ' + e.message);
+        log('Error: ' + e.message, 'err');
+      }
+    }
+
+    async function loadScreen(name) {
+      if (!runtimeReady) return;
+
+      document.getElementById('screen-select').value = name;
+      await previewXmlFile(`screens/${name}.xml`);
+    }
+
+    function refreshPreview() {
+      const current = document.getElementById('screen-select').value;
+      if (current) loadScreen(current);
+    }
+
+    // Compile
+    async function compileProject() {
+      const btn = document.getElementById('compile-btn');
+      btn.disabled = true;
+      btn.textContent = 'Compiling...';
+      log('\n── Compiling project ──', 'info');
+
+      try {
+        const resp = await fetch('/api/compile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project: PROJECT_PATH })
+        });
+
+        const result = await resp.json();
+
+        if (result.stdout) result.stdout.split('\n').forEach(l => l && log(l));
+        if (result.stderr) result.stderr.split('\n').forEach(l => l && log(l, 'warn'));
+
+        if (result.success) {
+          log('Compilation successful', 'ok');
+        } else {
+          log(`Compilation failed (code: ${result.code})`, 'err');
+        }
+      } catch(e) {
+        log('Compile error: ' + e.message, 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Compile';
+      }
+    }
+
+    // File operations
+    async function fetchText(url) {
+      const fullUrl = `/api/file?project=${encodeURIComponent(PROJECT_PATH)}&path=${encodeURIComponent(url)}`;
+      const r = await fetch(fullUrl);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+      return r.text();
+    }
+
+    async function fetchBinary(url) {
+      const fullUrl = `/api/file?project=${encodeURIComponent(PROJECT_PATH)}&path=${encodeURIComponent(url)}`;
+      const r = await fetch(fullUrl);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+      return new Uint8Array(await r.arrayBuffer());
+    }
+
+    async function fetchJson(url) {
+      const fullUrl = `/api/${url}?project=${encodeURIComponent(PROJECT_PATH)}`;
+      const r = await fetch(fullUrl);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+      return r.json();
+    }
+
+    function fsWriteText(path, content) {
+      try {
+        const dir = path.substring(0, path.lastIndexOf('/'));
+        if (dir) {
+          dir.split('/').reduce((acc, part) => {
+            if (!part) return acc;
+            const full = acc + '/' + part;
+            try { Module.FS.mkdir(full); } catch(e) {}
+            return full;
+          }, '');
+        }
+        Module.FS.writeFile(path, content);
+      } catch(e) {}
+    }
+
+    function fsWriteBinary(path, data) {
+      try {
+        const dir = path.substring(0, path.lastIndexOf('/'));
+        if (dir) {
+          dir.split('/').reduce((acc, part) => {
+            if (!part) return acc;
+            const full = acc + '/' + part;
+            try { Module.FS.mkdir(full); } catch(e) {}
+            return full;
+          }, '');
+        }
+        Module.FS.writeFile(path, data);
+      } catch(e) {}
+    }
+
+    // UI Helpers
+    function setOverlay(msg) {
+      const el = document.getElementById('canvas-overlay');
+      if (msg) {
+        el.textContent = msg;
+        el.style.display = 'flex';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    function showError(msg) {
+      document.getElementById('canvas-overlay').textContent = 'Error: ' + msg;
+      log(msg, 'err');
+    }
+
+    function log(msg, type) {
+      const el = document.getElementById('log');
+      const line = document.createElement('div');
+      line.className = 'line' + (type ? ' ' + type : '');
+      line.textContent = msg;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    // Zoom functionality
+    let zoomScale = 1.0;
+    const MIN_ZOOM = 0.25;
+    const MAX_ZOOM = 4.0;
+    const ZOOM_STEP = 0.1;
+
+    function updateZoom() {
+      const wrap = document.getElementById('canvas-wrap');
+      wrap.style.transform = `scale(${zoomScale})`;
+      document.getElementById('zoom-level').textContent = Math.round(zoomScale * 100) + '%';
+    }
+
+    function zoomIn() {
+    window.zoomIn = zoomIn;
+      if (zoomScale < MAX_ZOOM) {
+    window.zoomIn = zoomIn;
+        zoomScale = Math.min(MAX_ZOOM, zoomScale + ZOOM_STEP);
+    window.zoomIn = zoomIn;
+        updateZoom();
+    window.zoomIn = zoomIn;
+      }
+    window.zoomIn = zoomIn;
+    }
+    window.zoomIn = zoomIn;
+
+    function zoomOut() {
+    window.zoomOut = zoomOut;
+      if (zoomScale > MIN_ZOOM) {
+    window.zoomOut = zoomOut;
+        zoomScale = Math.max(MIN_ZOOM, zoomScale - ZOOM_STEP);
+    window.zoomOut = zoomOut;
+        updateZoom();
+    window.zoomOut = zoomOut;
+      }
+    window.zoomOut = zoomOut;
+    }
+    window.zoomOut = zoomOut;
+
+    function resetZoom() {
+    window.resetZoom = resetZoom;
+      zoomScale = 1.0;
+    window.resetZoom = resetZoom;
+      updateZoom();
+    window.resetZoom = resetZoom;
+    }
+    window.resetZoom = resetZoom;
+
+    // Mouse wheel zoom for canvas area
+    document.getElementById('canvas-area').addEventListener('wheel', function(e) {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        if (e.deltaY < 0) {
+          zoomIn();
+        } else {
+          zoomOut();
+        }
+      }
+    }, { passive: false });
+
+    // Also enable wheel zoom directly on canvas wrap
+    document.getElementById('canvas-wrap').addEventListener('wheel', function(e) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        zoomIn();
+      } else {
+        zoomOut();
+      }
+    }, { passive: false });
+  </script>
+
+  <script src="preview-bin/lved-runtime.js"></script>
+</body>
+</html>

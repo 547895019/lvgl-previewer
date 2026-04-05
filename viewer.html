@@ -70,13 +70,7 @@
     }
 
     /* Left sidebar - File tree */
-    #file-panel {
-      width: 240px;
-      background: #161b22;
-      border-right: 1px solid #30363d;
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
+    #file-panel {\n      width: 240px;\n      flex: 0 0 240px;\n      background: #161b22;\n      border-right: 1px solid #30363d;\n      display: flex;\n      flex-direction: column;
     }
     .panel-header {
       padding: 10px 12px;
@@ -149,17 +143,17 @@
     }
 
     /* Center panel - Preview */
-    #panel-resizer {
+    .panel-resizer {
       width: 6px;
       background: #30363d;
       cursor: col-resize;
       transition: background 0.2s;
       flex-shrink: 0;
     }
-    #panel-resizer:hover {
+    .panel-resizer:hover {
       background: #58a6ff;
     }
-    #panel-resizer.resizing {
+    .panel-resizer.resizing {
       background: #58a6ff;
     }
     #preview-panel {
@@ -432,6 +426,9 @@
       <div id="file-tree"></div>
     </div>
 
+    <!-- Left Resizer -->
+    <div id="left-resizer" class="panel-resizer"></div>
+
     <!-- Center: Preview -->
     <div id="preview-panel">
       <div id="preview-toolbar">
@@ -454,8 +451,8 @@
       </div>
     </div>
 
-    <!-- Panel Resizer -->
-    <div id="panel-resizer"></div>
+    <!-- Right Resizer -->
+    <div id="right-resizer" class="panel-resizer"></div>
 
     <!-- Right: XML Editor -->
     <div id="editor-panel">
@@ -1254,9 +1251,9 @@
       });
     })();
 
-    // Panel resize functionality (horizontal)
-    (function setupPanelResizer() {
-      const resizer = document.getElementById('panel-resizer');
+    // Panel resize functionality (horizontal) - Right resizer (preview | editor)
+    (function setupRightResizer() {
+      const resizer = document.getElementById('right-resizer');
       const editorPanel = document.getElementById('editor-panel');
       let isResizing = false;
       let startX = 0;
@@ -1273,10 +1270,46 @@
 
       document.addEventListener('mousemove', (e) => {
         if (!isResizing) return;
-        const delta = startX - e.clientX;
-        const newWidth = Math.max(200, Math.min(800, startWidth + delta));
+        // Moving right (e.clientX > startX) means decreasing editor width
+        const delta = e.clientX - startX;
+        const newWidth = Math.max(200, Math.min(800, startWidth - delta));
         editorPanel.style.width = newWidth + 'px';
-        editorPanel.style.flex = 'none'; // Remove flex constraint
+        editorPanel.style.flex = '0 0 ' + newWidth + 'px';
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isResizing) {
+          isResizing = false;
+          resizer.classList.remove('resizing');
+          document.body.style.cursor = '';
+        }
+      });
+    })();
+
+    // Panel resize functionality (horizontal) - Left resizer (file-panel | preview)
+    (function setupLeftResizer() {
+      const resizer = document.getElementById('left-resizer');
+      const filePanel = document.getElementById('file-panel');
+      let isResizing = false;
+      let startX = 0;
+      let startWidth = 0;
+
+      resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = filePanel.offsetWidth;
+        resizer.classList.add('resizing');
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        // Moving left (e.clientX < startX) means decreasing file-panel width
+        const delta = e.clientX - startX;
+        const newWidth = Math.max(150, Math.min(400, startWidth + delta));
+        filePanel.style.width = newWidth + 'px';
+        filePanel.style.flex = '0 0 ' + newWidth + 'px';
       });
 
       document.addEventListener('mouseup', () => {

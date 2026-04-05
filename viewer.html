@@ -961,6 +961,11 @@
     async function previewXmlFile(filePath) {
       if (!runtimeReady) return;
 
+      // Don't render config files
+      if (filePath === 'globals.xml' || filePath === 'project.xml') {
+        return;
+      }
+
       const isScreen = filePath.startsWith('screens/');
       const isComponent = filePath.startsWith('components/');
       const isGlobals = filePath === 'globals.xml';

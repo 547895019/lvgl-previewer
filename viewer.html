@@ -918,9 +918,6 @@
         const ret = Module.ccall('lvrt_initialize', 'number', ['string'], ['#canvas']);
         if (ret !== 0) throw new Error('lvrt_initialize returned ' + ret);
         log('LVGL initialized', 'ok');
-        // Set default language early
-        Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
-        log('Default language set: en', 'ok');
       } catch(e) {
         setOverlay('Init failed');
         log('Init error: ' + e.message, 'err');
@@ -947,7 +944,16 @@
       if (!initSuccess) {
         log(`${baseName}_init: not found`, 'warn');
       }
-// Load globals via WASM
+
+      // Set default language after project init
+      try {
+        Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
+        log('Language set: en', 'ok');
+      } catch(e) {
+        log('Language set error: ' + e.message, 'warn');
+      }
+
+      // Load globals via WASM
       try {
         let globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
         globalsXml = globalsXml.replace(/<!--[\s\S]*?-->/g, '');
@@ -1095,9 +1101,6 @@
             }
           }
           
-          // Ensure language is set before rendering
-          Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
-          
           // Now load the target screen
           ret = Module.ccall('lvrt_process_data', 'number',
             ['string', 'string', 'number', 'string', 'string'],
@@ -1113,9 +1116,6 @@
           // Create a preview wrapper that uses the component
           const previewXml = `\u003cview\u003e\n  \u003c${compName} width="100%" height="100%" /\u003e\n\u003c/view\u003e`;
 
-          // Ensure language is set before rendering
-          Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
-          
           ret = Module.ccall('lvrt_process_data', 'number',
             ['string', 'string', 'number', 'string', 'string'],
             [previewXml, 'preview', 0, 'screen', '']);

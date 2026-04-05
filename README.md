@@ -41,17 +41,17 @@ npm install
 node server.js [port]
 ```
 
-Default port is `8080`. You can specify a custom port as an argument.
+Default port is `8181`. You can specify a custom port as an argument.
 
 ### 3. Open in Browser
 
-Navigate to `http://localhost:8080` in your browser.
+Navigate to `http://localhost:8181` in your browser.
 
 ### 4. Add a Project
 
 - Enter a project name and absolute path to an LVGL project directory
 - Click "Open Project" to load it
-- Or use URL parameter: `http://localhost:8080/?project=/path/to/project`
+- Or use URL parameter: `http://localhost:8181/?project=/path/to/project`
 
 ## Supported Project Structure
 

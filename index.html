@@ -135,8 +135,21 @@
 
     #project-list {
       flex: 1;
-      overflow-y: auto;
+      overflow-y: scroll;
       padding: 8px;
+    }
+    #project-list::-webkit-scrollbar {
+      width: 8px;
+    }
+    #project-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #project-list::-webkit-scrollbar-thumb {
+      background: #484f58;
+      border-radius: 4px;
+    }
+    #project-list::-webkit-scrollbar-thumb:hover {
+      background: #6e7681;
     }
     .project-item {
       display: flex;

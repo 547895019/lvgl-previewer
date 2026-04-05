@@ -1366,8 +1366,23 @@
 
     function updateZoom() {
       const wrap = document.getElementById('canvas-wrap');
+      const canvas = document.getElementById('canvas');
+      const canvasArea = document.getElementById('canvas-area');
+      
       wrap.style.transform = `scale(${zoomScale})`;
       document.getElementById('zoom-level').textContent = Math.round(zoomScale * 100) + '%';
+      
+      // Recalculate scroll area based on scaled canvas size
+      const scaledWidth = canvas.width * zoomScale;
+      const scaledHeight = canvas.height * zoomScale;
+      
+      // Ensure the wrap div has proper dimensions for scrolling
+      wrap.style.width = canvas.width + 'px';
+      wrap.style.height = canvas.height + 'px';
+      
+      // Add extra padding to canvas-area to allow scrolling when zoomed
+      const extraPadding = Math.max(0, Math.max(scaledWidth - canvasArea.clientWidth, scaledHeight - canvasArea.clientHeight) / 2 + 20);
+      canvasArea.style.padding = (20 + extraPadding) + 'px';
     }
 
     function zoomIn() {

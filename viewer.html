@@ -1369,6 +1369,8 @@
       const canvas = document.getElementById('canvas');
       const canvasArea = document.getElementById('canvas-area');
       
+      // Set transform origin to top-left for proper alignment
+      wrap.style.transformOrigin = 'top left';
       wrap.style.transform = `scale(${zoomScale})`;
       document.getElementById('zoom-level').textContent = Math.round(zoomScale * 100) + '%';
       
@@ -1376,13 +1378,9 @@
       const scaledWidth = canvas.width * zoomScale;
       const scaledHeight = canvas.height * zoomScale;
       
-      // Ensure the wrap div has proper dimensions for scrolling
-      wrap.style.width = canvas.width + 'px';
-      wrap.style.height = canvas.height + 'px';
-      
-      // Add extra padding to canvas-area to allow scrolling when zoomed
-      const extraPadding = Math.max(0, Math.max(scaledWidth - canvasArea.clientWidth, scaledHeight - canvasArea.clientHeight) / 2 + 20);
-      canvasArea.style.padding = (20 + extraPadding) + 'px';
+      // Set minimum size for canvas-area to fit the scaled canvas
+      canvasArea.style.minWidth = scaledWidth + 40 + 'px';
+      canvasArea.style.minHeight = scaledHeight + 40 + 'px';
     }
 
     function zoomIn() {

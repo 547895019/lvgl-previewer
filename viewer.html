@@ -886,11 +886,9 @@
         return;
       }
 
-      // Project init - try with/without _ prefix and _gen suffix
+      // Project init - try _gen suffix variants
       const baseName = PROJECT_NAME.replace(/-/g, '_');
       const initFns = [
-        '_' + baseName + '_init_gen',
-        '_' + baseName + '_init',
         baseName + '_init_gen',
         baseName + '_init'
       ];

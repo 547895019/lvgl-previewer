@@ -892,21 +892,15 @@
         baseName + '_init_gen',
         baseName + '_init'
       ];
-      // Debug: log available exports
-      const availableExports = Object.keys(Module).filter(k => k.includes('init') || k.includes(baseName)).sort();
-      log('Available exports: ' + availableExports.join(', '), 'info');
       let initSuccess = false;
       for (const initFn of initFns) {
         if (initSuccess) break;
-        const fullName = '_' + initFn;
-        const exists = typeof Module[fullName] === 'function';
-        log(`Checking Module["${fullName}"] = ${exists ? "function" : typeof Module[fullName]}`, 'info');
         try {
           Module.ccall(initFn, 'void', ['string'], ['A:']);
           log(`${initFn}('A:') done`, 'ok');
           initSuccess = true;
         } catch(e) {
-          log(`${initFn} failed: ${e.message}`, 'warn');
+          // Try next variant
         }
       }
       if (!initSuccess) {
@@ -1005,8 +999,29 @@
 
         let ret;
         if (isScreen) {
-          // Screen: use lvrt_process_data
+          // Screen: register all screens first for multi-screen navigation
           const name = filePath.replace('screens/', '').replace('.xml', '');
+          
+          // Fetch and register all screens
+          const screens = await fetchJson('screens');
+          for (const screenName of screens) {
+            const screenPath = `screens/${screenName}.xml`;
+            const screenXml = applyGlobals(fileCache[screenPath] || await fetchText(screenPath));
+            Module.ccall('lvrt_xml_load_component_data', 'number',
+              ['string', 'string'], [screenName, screenXml]);
+          }
+          
+          // Create permanent screens
+          for (const screenName of screens) {
+            const screenPath = `screens/${screenName}.xml`;
+            const screenXml = fileCache[screenPath] || await fetchText(screenPath);
+            if (screenXml.includes('permanent="true"')) {
+              Module.ccall('lvrt_component_create', 'number',
+                ['string', 'string'], [screenName, '']);
+            }
+          }
+          
+          // Now load the target screen
           ret = Module.ccall('lvrt_process_data', 'number',
             ['string', 'string', 'number', 'string', 'string'],
             [xmlToRender, name, 0, 'screen', '']);

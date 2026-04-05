@@ -396,7 +396,7 @@
     <span class="project-name" id="project-title">Loading...</span>
     <span class="spacer"></span>
     <button class="btn" onclick="compileProject()" id="compile-btn">Compile</button>
-    <button class="btn primary" onclick="saveCurrentFile()" id="save-btn">Save</button>
+    <button class="btn primary" id="save-btn">Save</button>
   </div>
 
   <div id="main">
@@ -409,7 +409,7 @@
     <!-- Center: Preview -->
     <div id="preview-panel">
       <div id="preview-toolbar">
-        <select class="screen-select" id="screen-select" onchange="loadScreen(this.value)">
+        <select class="screen-select" id="screen-select">
           <option>Loading screens...</option>
         </select>
         <span class="spacer"></span>
@@ -1184,8 +1184,10 @@
       document.getElementById('log').innerHTML = '';
     }
     
-    // Attach event listener for clear log button
+    // Attach event listeners
     document.getElementById('log-clear').addEventListener('click', clearLog);
+    document.getElementById('save-btn').addEventListener('click', saveCurrentFile);
+    document.getElementById('screen-select').addEventListener('change', (e) => loadScreen(e.target.value));
 
     // Zoom functionality
     let zoomScale = 1.0;

@@ -328,6 +328,19 @@
     }
 
     /* Log panel */
+    #log-resizer {
+      height: 6px;
+      background: #30363d;
+      cursor: row-resize;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    #log-resizer:hover {
+      background: #58a6ff;
+    }
+    #log-resizer.resizing {
+      background: #58a6ff;
+    }
     #log-panel {
       height: 120px;
       background: #0d1117;
@@ -436,6 +449,9 @@
       <div id="editor"></div>
     </div>
   </div>
+
+  <!-- Log Resizer -->
+  <div id="log-resizer"></div>
 
   <!-- Bottom: Log -->
   <div id="log-panel">
@@ -1188,6 +1204,39 @@
     document.getElementById('log-clear').addEventListener('click', clearLog);
     document.getElementById('save-btn').addEventListener('click', saveCurrentFile);
     document.getElementById('screen-select').addEventListener('change', (e) => loadScreen(e.target.value));
+
+    // Log panel resize functionality
+    (function setupLogResizer() {
+      const resizer = document.getElementById('log-resizer');
+      const logPanel = document.getElementById('log-panel');
+      let isResizing = false;
+      let startY = 0;
+      let startHeight = 0;
+
+      resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startY = e.clientY;
+        startHeight = logPanel.offsetHeight;
+        resizer.classList.add('resizing');
+        document.body.style.cursor = 'row-resize';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const delta = startY - e.clientY;
+        const newHeight = Math.max(50, Math.min(400, startHeight + delta));
+        logPanel.style.height = newHeight + 'px';
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isResizing) {
+          isResizing = false;
+          resizer.classList.remove('resizing');
+          document.body.style.cursor = '';
+        }
+      });
+    })();
 
     // Zoom functionality
     let zoomScale = 1.0;

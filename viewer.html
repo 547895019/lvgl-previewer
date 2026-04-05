@@ -149,6 +149,19 @@
     }
 
     /* Center panel - Preview */
+    #panel-resizer {
+      width: 6px;
+      background: #30363d;
+      cursor: col-resize;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    #panel-resizer:hover {
+      background: #58a6ff;
+    }
+    #panel-resizer.resizing {
+      background: #58a6ff;
+    }
     #preview-panel {
       flex: 1;
       display: flex;
@@ -440,6 +453,9 @@
         <div id="canvas-size">320 × 240</div>
       </div>
     </div>
+
+    <!-- Panel Resizer -->
+    <div id="panel-resizer"></div>
 
     <!-- Right: XML Editor -->
     <div id="editor-panel">
@@ -1227,6 +1243,40 @@
         const delta = startY - e.clientY;
         const newHeight = Math.max(50, Math.min(400, startHeight + delta));
         logPanel.style.height = newHeight + 'px';
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isResizing) {
+          isResizing = false;
+          resizer.classList.remove('resizing');
+          document.body.style.cursor = '';
+        }
+      });
+    })();
+
+    // Panel resize functionality (horizontal)
+    (function setupPanelResizer() {
+      const resizer = document.getElementById('panel-resizer');
+      const editorPanel = document.getElementById('editor-panel');
+      let isResizing = false;
+      let startX = 0;
+      let startWidth = 0;
+
+      resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = editorPanel.offsetWidth;
+        resizer.classList.add('resizing');
+        document.body.style.cursor = 'col-resize';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const delta = startX - e.clientX;
+        const newWidth = Math.max(200, Math.min(800, startWidth + delta));
+        editorPanel.style.width = newWidth + 'px';
+        editorPanel.style.flex = 'none'; // Remove flex constraint
       });
 
       document.addEventListener('mouseup', () => {

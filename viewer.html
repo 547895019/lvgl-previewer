@@ -1367,34 +1367,23 @@
     function updateZoom() {
       const wrap = document.getElementById('canvas-wrap');
       const canvas = document.getElementById('canvas');
-      const canvasArea = document.getElementById('canvas-area');
       
       // Apply scale transform
       wrap.style.transformOrigin = 'center center';
       wrap.style.transform = `scale(${zoomScale})`;
       document.getElementById('zoom-level').textContent = Math.round(zoomScale * 100) + '%';
       
-      // Calculate scaled dimensions
-      const scaledWidth = canvas.width * zoomScale;
-      const scaledHeight = canvas.height * zoomScale;
-      
-      // Set the wrapper size to match scaled dimensions for proper scrolling
-      // The wrapper needs to be at least as big as the scaled canvas plus padding
-      const padding = 40;
+      // Always set wrapper to original canvas size
       wrap.style.width = canvas.width + 'px';
       wrap.style.height = canvas.height + 'px';
       
-      // Ensure canvas-area can scroll to show the entire scaled canvas
-      if (scaledWidth > canvasArea.clientWidth - padding * 2 || 
-          scaledHeight > canvasArea.clientHeight - padding * 2) {
-        // When zoomed larger than viewport, ensure scroll area is large enough
-        canvasArea.style.minWidth = (scaledWidth + padding * 2) + 'px';
-        canvasArea.style.minHeight = (scaledHeight + padding * 2) + 'px';
-      } else {
-        // When zoomed smaller, reset to default
-        canvasArea.style.minWidth = '';
-        canvasArea.style.minHeight = '';
-      }
+      // Always ensure enough scroll area for max zoom (4x)
+      // This prevents scroll bar flickering when zooming
+      const maxScaledWidth = canvas.width * 4;
+      const maxScaledHeight = canvas.height * 4;
+      const canvasArea = document.getElementById('canvas-area');
+      canvasArea.style.minWidth = (maxScaledWidth + 100) + 'px';
+      canvasArea.style.minHeight = (maxScaledHeight + 100) + 'px';
     }
 
     function zoomIn() {

@@ -732,14 +732,20 @@
       projectItem.onclick = () => openFile('project.xml');
       globalsSection.appendChild(projectItem);
 
-      // Add translations.xml only if exists
-      if (fileCache['translations.xml']) {
-        const transItem = document.createElement('div');
-        transItem.className = 'tree-item';
-        transItem.dataset.path = 'translations.xml';
-        transItem.innerHTML = `<span class="icon">⚙</span>translations.xml`;
-        transItem.onclick = () => openFile('translations.xml');
-        globalsSection.appendChild(transItem);
+      // Check and add translations.xml only if exists
+      try {
+        const transXml = await fetchText('translations.xml');
+        if (transXml) {
+          fileCache['translations.xml'] = transXml;
+          const transItem = document.createElement('div');
+          transItem.className = 'tree-item';
+          transItem.dataset.path = 'translations.xml';
+          transItem.innerHTML = `<span class="icon">⚙</span>translations.xml`;
+          transItem.onclick = () => openFile('translations.xml');
+          globalsSection.appendChild(transItem);
+        }
+      } catch(e) {
+        // translations.xml is optional, ignore if not found
       }
 
       tree.appendChild(globalsSection);

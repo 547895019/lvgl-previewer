@@ -83,8 +83,9 @@
     }
     #file-tree {
       flex: 1;
-      overflow-y: auto;
+      overflow-y: scroll;
       padding: 8px 0;
+      max-height: 100%;
     }
     #file-tree::-webkit-scrollbar {
       width: 8px;
@@ -433,6 +434,7 @@
           <option>Loading screens...</option>
         </select>
         <span class="spacer"></span>
+        <span id="zoom-level" style="font-size:11px;color:#8b949e;min-width:45px;text-align:center;">100%</span>
         <button class="btn" id="refresh-btn">Refresh</button>
       </div>
       <div id="canvas-area">
@@ -1365,6 +1367,7 @@
     function updateZoom() {
       const wrap = document.getElementById('canvas-wrap');
       wrap.style.transform = `scale(${zoomScale})`;
+      document.getElementById('zoom-level').textContent = Math.round(zoomScale * 100) + '%';
     }
 
     function zoomIn() {

@@ -854,7 +854,7 @@
         const canvas = document.getElementById('canvas');
         Module = await createModule({
           canvas,
-          locateFile: f => 'preview-bin/' + f,
+          locateFile: f => 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH),
           print: msg => { if (msg.includes('[Warn]')) log(msg, 'warn'); else log(msg); },
           printErr: msg => log(msg, 'warn'),
         });
@@ -1234,6 +1234,13 @@
     }, { passive: false });
   </script>
 
-  <script src="preview-bin/lved-runtime.js"></script>
+  <script>
+    // Dynamically load runtime with project path
+    const runtimeScript = document.createElement('script');
+    const urlParams = new URLSearchParams(window.location.search);
+    const projectPath = urlParams.get('project') || '';
+    runtimeScript.src = 'preview-bin/lved-runtime.js?project=' + encodeURIComponent(projectPath);
+    document.body.appendChild(runtimeScript);
+  </script>
 </body>
 </html>

@@ -886,13 +886,27 @@
         return;
       }
 
-      // Project init
-      const initFn = PROJECT_NAME.replace(/-/g, '_') + '_init';
-      try {
-        Module.ccall(initFn, 'void', ['string'], ['A:']);
-        log(`${initFn}('A:') done`, 'ok');
-      } catch(e) {
-        log(`${initFn}: ${e.message}`, 'warn');
+      // Project init - try with/without _ prefix and _gen suffix
+      const baseName = PROJECT_NAME.replace(/-/g, '_');
+      const initFns = [
+        '_' + baseName + '_init_gen',
+        '_' + baseName + '_init',
+        baseName + '_init_gen',
+        baseName + '_init'
+      ];
+      let initSuccess = false;
+      for (const initFn of initFns) {
+        if (initSuccess) break;
+        try {
+          Module.ccall(initFn, 'void', ['string'], ['A:']);
+          log(`${initFn}('A:') done`, 'ok');
+          initSuccess = true;
+        } catch(e) {
+          // Try next variant
+        }
+      }
+      if (!initSuccess) {
+        log(`${baseName}_init: not found`, 'warn');
       }
 
       // Load globals via WASM

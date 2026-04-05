@@ -109,6 +109,28 @@ function scanAssets(projectRoot) {
 }
 
 // Serve static file
+function serveFileWithNoCache(res, filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const contentType = MIME[ext] || 'application/octet-stream';
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not found: ' + filePath);
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      ...SECURITY_HEADERS,
+    });
+    res.end(data);
+  });
+}
+
 function serveFile(res, filePath) {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME[ext] || 'application/octet-stream';
@@ -270,7 +292,7 @@ const server = http.createServer((req, res) => {
       const filePath = path.join(base, 'preview-bin', rel);
       try {
         if (fs.existsSync(filePath)) {
-          serveFile(res, filePath);
+          serveFileWithNoCache(res, filePath);
           return;
         }
       } catch(e) {}

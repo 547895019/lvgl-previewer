@@ -889,9 +889,14 @@
 
       try {
         const canvas = document.getElementById('canvas');
+        log('Loading WASM for project: ' + PROJECT_PATH, 'info');
         Module = await createModule({
           canvas,
-          locateFile: f => 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH),
+          locateFile: f => {
+            const url = 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now();
+            log('Loading: ' + url, 'info');
+            return url;
+          },
           print: msg => { if (msg.includes('[Warn]')) log(msg, 'warn'); else log(msg); },
           printErr: msg => log(msg, 'warn'),
         });

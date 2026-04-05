@@ -892,11 +892,7 @@
         log('Loading WASM for project: ' + PROJECT_PATH, 'info');
         Module = await createModule({
           canvas,
-          locateFile: f => {
-            const url = 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now();
-            log('Loading: ' + url, 'info');
-            return url;
-          },
+          locateFile: f => 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now(),
           print: msg => { if (msg.includes('[Warn]')) log(msg, 'warn'); else log(msg); },
           printErr: msg => log(msg, 'warn'),
         });

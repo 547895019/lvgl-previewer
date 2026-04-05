@@ -137,3 +137,32 @@ grep 'wasmExports\[".*_init"\]' preview-bin/lved-runtime.js
 
 - 在线预览器：https://viewer.lvgl.io/
 - LVGL 文档：https://docs.lvgl.io/
+
+---
+
+## 额外修复记录
+
+### WASM Runtime 缓存问题
+
+**现象**：切换不同项目时，加载的是错误的 runtime（如 `examples` 的 `_examples_init` 而不是目标项目的 `_ui_translations_init`）
+
+**原因**：浏览器缓存了 `preview-bin/lved-runtime.js` 和 `.wasm` 文件
+
+**解决**：
+1. 在 `locateFile` 返回的 URL 中添加时间戳参数 `&t=${Date.now()}`
+2. 服务器端为 preview-bin 文件添加 `Cache-Control: no-cache` 响应头
+
+**代码变更**：
+- `viewer.html`: `locateFile: f => 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now()`
+- `server.js`: 新增 `serveFileWithNoCache()` 函数用于 preview-bin 文件
+
+### translations.xml 支持
+
+**现象**：加载带翻译的项目时出现警告 `lv_translation_get: \`\` language is not found`
+
+**解决**：
+1. 在 `initWASM()` 中加载 `translations.xml` 并调用 `lvrt_xml_load_translations_data`
+2. 设置默认语言 `lvrt_translation_set_language('en')`
+3. 在文件树 Configuration 部分添加 `translations.xml` 条目
+4. 点击 `globals.xml` 时同时重新加载 translations
+

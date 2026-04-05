@@ -1239,7 +1239,12 @@
     
     // Attach event listeners
     document.getElementById('log-clear').addEventListener('click', clearLog);
-    document.getElementById('save-btn').addEventListener('click', saveCurrentFile);\n    document.getElementById('compile-btn').addEventListener('click', compileProject);\n    document.getElementById('zoom-out-btn').addEventListener('click', zoomOut);\n    document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);\n    document.getElementById('zoom-in-btn').addEventListener('click', zoomIn);\n    document.getElementById('refresh-btn').addEventListener('click', refreshPreview);
+    document.getElementById('save-btn').addEventListener('click', saveCurrentFile);
+    document.getElementById('compile-btn').addEventListener('click', compileProject);
+    document.getElementById('zoom-out-btn').addEventListener('click', zoomOut);
+    document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);
+    document.getElementById('zoom-in-btn').addEventListener('click', zoomIn);
+    document.getElementById('refresh-btn').addEventListener('click', refreshPreview);
     document.getElementById('screen-select').addEventListener('change', (e) => loadScreen(e.target.value));
 
     // Log panel resize functionality

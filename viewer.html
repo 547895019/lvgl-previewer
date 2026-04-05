@@ -737,6 +737,14 @@
       projectItem.onclick = () => openFile('project.xml');
       globalsSection.appendChild(projectItem);
 
+      // Add translations.xml if exists
+      const transItem = document.createElement('div');
+      transItem.className = 'tree-item';
+      transItem.dataset.path = 'translations.xml';
+      transItem.innerHTML = `<span class="icon">⚙</span>translations.xml`;
+      transItem.onclick = () => openFile('translations.xml');
+      globalsSection.appendChild(transItem);
+
       tree.appendChild(globalsSection);
     }
 
@@ -1005,7 +1013,7 @@
       if (!runtimeReady) return;
 
       // Don't render config files
-      if (filePath === 'globals.xml' || filePath === 'project.xml') {
+      if (filePath === 'globals.xml' || filePath === 'project.xml' || filePath === 'translations.xml') {
         return;
       }
 

@@ -1079,29 +1079,9 @@
 
         let ret;
         if (isScreen) {
-          // Screen: register all screens first for multi-screen navigation
+          // Screen: just load directly without registering as components
           const name = filePath.replace('screens/', '').replace('.xml', '');
           
-          // Fetch and register all screens
-          const screens = await fetchJson('screens');
-          for (const screenName of screens) {
-            const screenPath = `screens/${screenName}.xml`;
-            const screenXml = applyGlobals(fileCache[screenPath] || await fetchText(screenPath));
-            Module.ccall('lvrt_xml_load_component_data', 'number',
-              ['string', 'string'], [screenName, screenXml]);
-          }
-          
-          // Create permanent screens
-          for (const screenName of screens) {
-            const screenPath = `screens/${screenName}.xml`;
-            const screenXml = fileCache[screenPath] || await fetchText(screenPath);
-            if (screenXml.includes('permanent="true"')) {
-              Module.ccall('lvrt_component_create', 'number',
-                ['string', 'string'], [screenName, '']);
-            }
-          }
-          
-          // Now load the target screen
           ret = Module.ccall('lvrt_process_data', 'number',
             ['string', 'string', 'number', 'string', 'string'],
             [xmlToRender, name, 0, 'screen', '']);

@@ -277,7 +277,20 @@
   </div>
 
   <script>
-    let projects = JSON.parse(localStorage.getItem('lvgl-projects') || '[]');
+    const BUILTIN_PROJECTS = [
+  { id: 'builtin_tutorial_1_hello_world', name: 'Tutorial: 1 Hello World', path: '/home/chenjinbin/lvgl-previewer/tutorials/1_hello_world' },
+  { id: 'builtin_tutorial_2_new_component', name: 'Tutorial: 2 New Component', path: '/home/chenjinbin/lvgl-previewer/tutorials/2_new_component' },
+  { id: 'builtin_tutorial_3_assets', name: 'Tutorial: 3 Assets', path: '/home/chenjinbin/lvgl-previewer/tutorials/3_assets' },
+  { id: 'builtin_tutorial_4_screens', name: 'Tutorial: 4 Screens', path: '/home/chenjinbin/lvgl-previewer/tutorials/4_screens' },
+  { id: 'builtin_tutorial_5_layouts', name: 'Tutorial: 5 Layouts', path: '/home/chenjinbin/lvgl-previewer/tutorials/5_layouts' },
+  { id: 'builtin_tutorial_6_data_binding', name: 'Tutorial: 6 Data Binding', path: '/home/chenjinbin/lvgl-previewer/tutorials/6_data_binding' },
+  { id: 'builtin_tutorial_7_translations', name: 'Tutorial: 7 Translations', path: '/home/chenjinbin/lvgl-previewer/tutorials/7_translations' },
+  { id: 'builtin_tutorial_8_animations', name: 'Tutorial: 8 Animations', path: '/home/chenjinbin/lvgl-previewer/tutorials/8_animations' },
+  { id: 'builtin_examples', name: 'Examples', path: '/home/chenjinbin/lvgl-previewer/examples' },
+];
+
+    let userProjects = JSON.parse(localStorage.getItem('lvgl-projects') || '[]');
+    let projects = [...BUILTIN_PROJECTS, ...userProjects];
     let currentProjectId = localStorage.getItem('lvgl-current-project') || null;
 
     const API_BASE = '';
@@ -319,7 +332,9 @@
 
       // Add and load
       const id = Date.now().toString();
-      projects.push({ id, name, path });
+      const newProject = { id, name, path };
+      userProjects.push(newProject);
+      projects = [...BUILTIN_PROJECTS, ...userProjects];
       currentProjectId = id;
       saveProjects();
       renderProjectList();
@@ -328,21 +343,47 @@
 
     function renderProjectList() {
       const list = document.getElementById('project-list');
-      if (projects.length === 0) {
-        list.innerHTML = '<div class="no-projects">No projects yet.<br>Add a project below.</div>';
-        return;
+
+      // Separate built-in and user projects
+      const builtinList = projects.filter(p => p.id.startsWith('builtin_'));
+      const userList = projects.filter(p => !p.id.startsWith('builtin_'));
+
+      let html = '';
+
+      // Built-in projects section
+      if (builtinList.length > 0) {
+        html += '<div style="padding: 8px 12px; font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px;">Built-in</div>';
+        html += builtinList.map(p => `
+          <div class="project-item ${p.id === currentProjectId ? 'active' : ''}" onclick="loadProject('${p.id}')">
+            <div class="icon">&#128218;</div>
+            <div class="info">
+              <div class="name">${escapeHtml(p.name)}</div>
+              <div class="path">${escapeHtml(p.path)}</div>
+            </div>
+          </div>
+        `).join('');
       }
 
-      list.innerHTML = projects.map(p => `
-        <div class="project-item ${p.id === currentProjectId ? 'active' : ''}" onclick="loadProject('${p.id}')">
-          <div class="icon">📐</div>
-          <div class="info">
-            <div class="name">${escapeHtml(p.name)}</div>
-            <div class="path">${escapeHtml(p.path)}</div>
+      // User projects section
+      if (userList.length > 0) {
+        html += '<div style="padding: 8px 12px; font-size: 10px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 8px;">My Projects</div>';
+        html += userList.map(p => `
+          <div class="project-item ${p.id === currentProjectId ? 'active' : ''}" onclick="loadProject('${p.id}')">
+            <div class="icon">&#128208;</div>
+            <div class="info">
+              <div class="name">${escapeHtml(p.name)}</div>
+              <div class="path">${escapeHtml(p.path)}</div>
+            </div>
+            <button class="remove" onclick="removeProject(event, '${p.id}')">&#10005;</button>
           </div>
-          <button class="remove" onclick="removeProject(event, '${p.id}')">✕</button>
-        </div>
-      `).join('');
+        `).join('');
+      }
+
+      if (html === '') {
+        html = '<div class="no-projects">No projects yet.<br>Add a project below.</div>';
+      }
+
+      list.innerHTML = html;
     }
 
     function escapeHtml(text) {
@@ -394,7 +435,9 @@
       }
 
       const id = Date.now().toString();
-      projects.push({ id, name, path });
+      const newProject = { id, name, path };
+      userProjects.push(newProject);
+      projects = [...BUILTIN_PROJECTS, ...userProjects];
       currentProjectId = id;
       saveProjects();
       renderProjectList();
@@ -403,7 +446,14 @@
 
     function removeProject(e, id) {
       e.stopPropagation();
-      projects = projects.filter(p => p.id !== id);
+      // Check if it's a built-in project
+      const isBuiltin = BUILTIN_PROJECTS.some(p => p.id === id);
+      if (isBuiltin) {
+        alert('Built-in projects cannot be removed');
+        return;
+      }
+      userProjects = userProjects.filter(p => p.id !== id);
+      projects = [...BUILTIN_PROJECTS, ...userProjects];
       if (currentProjectId === id) {
         currentProjectId = null;
         showEmptyState();
@@ -428,7 +478,7 @@
     }
 
     function saveProjects() {
-      localStorage.setItem('lvgl-projects', JSON.stringify(projects));
+      localStorage.setItem('lvgl-projects', JSON.stringify(userProjects));
       localStorage.setItem('lvgl-current-project', currentProjectId || '');
     }
 

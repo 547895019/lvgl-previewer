@@ -892,22 +892,27 @@
         baseName + '_init_gen',
         baseName + '_init'
       ];
+      // Debug: log available exports
+      const availableExports = Object.keys(Module).filter(k => k.includes('init') || k.includes(baseName)).sort();
+      log('Available exports: ' + availableExports.join(', '), 'info');
       let initSuccess = false;
       for (const initFn of initFns) {
         if (initSuccess) break;
+        const fullName = '_' + initFn;
+        const exists = typeof Module[fullName] === 'function';
+        log(`Checking Module["${fullName}"] = ${exists ? "function" : typeof Module[fullName]}`, 'info');
         try {
           Module.ccall(initFn, 'void', ['string'], ['A:']);
           log(`${initFn}('A:') done`, 'ok');
           initSuccess = true;
         } catch(e) {
-          // Try next variant
+          log(`${initFn} failed: ${e.message}`, 'warn');
         }
       }
       if (!initSuccess) {
         log(`${baseName}_init: not found`, 'warn');
       }
-
-      // Load globals via WASM
+// Load globals via WASM
       try {
         let globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
         globalsXml = globalsXml.replace(/<!--[\s\S]*?-->/g, '');

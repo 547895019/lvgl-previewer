@@ -415,7 +415,7 @@
     <span class="logo">◆ LVGL Previewer</span>
     <span class="project-name" id="project-title">Loading...</span>
     <span class="spacer"></span>
-    <button class="btn" onclick="compileProject()" id="compile-btn">Compile</button>
+    <button class="btn" id="compile-btn">Compile</button>
     <button class="btn primary" id="save-btn">Save</button>
   </div>
 
@@ -437,10 +437,10 @@
         </select>
         <span class="spacer"></span>
         <span id="zoom-level" style="font-size:11px;color:#8b949e;min-width:45px;text-align:center;">100%</span>
-        <button class="btn" onclick="zoomOut()">−</button>
-        <button class="btn" onclick="resetZoom()">Reset</button>
-        <button class="btn" onclick="zoomIn()">+</button>
-        <button class="btn" onclick="refreshPreview()">Refresh</button>
+        <button class="btn" id="zoom-out-btn">−</button>
+        <button class="btn" id="zoom-reset-btn">Reset</button>
+        <button class="btn" id="zoom-in-btn">+</button>
+        <button class="btn" id="refresh-btn">Refresh</button>
       </div>
       <div id="canvas-area">
         <div id="canvas-wrap">
@@ -1239,7 +1239,7 @@
     
     // Attach event listeners
     document.getElementById('log-clear').addEventListener('click', clearLog);
-    document.getElementById('save-btn').addEventListener('click', saveCurrentFile);
+    document.getElementById('save-btn').addEventListener('click', saveCurrentFile);\n    document.getElementById('compile-btn').addEventListener('click', compileProject);\n    document.getElementById('zoom-out-btn').addEventListener('click', zoomOut);\n    document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);\n    document.getElementById('zoom-in-btn').addEventListener('click', zoomIn);\n    document.getElementById('refresh-btn').addEventListener('click', refreshPreview);
     document.getElementById('screen-select').addEventListener('change', (e) => loadScreen(e.target.value));
 
     // Log panel resize functionality

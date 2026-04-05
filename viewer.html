@@ -93,13 +93,10 @@
       background: transparent;
     }
     #file-tree::-webkit-scrollbar-thumb {
-      background: transparent;
+      background: #484f58;
       border-radius: 4px;
     }
-    #file-tree.show-scrollbar::-webkit-scrollbar-thumb {
-      background: #484f58;
-    }
-    #file-tree.show-scrollbar::-webkit-scrollbar-thumb:hover {
+    #file-tree::-webkit-scrollbar-thumb:hover {
       background: #6e7681;
     }
     .tree-section {
@@ -436,10 +433,6 @@
           <option>Loading screens...</option>
         </select>
         <span class="spacer"></span>
-        <span id="zoom-level" style="font-size:11px;color:#8b949e;min-width:45px;text-align:center;">100%</span>
-        <button class="btn" id="zoom-out-btn">−</button>
-        <button class="btn" id="zoom-reset-btn">Reset</button>
-        <button class="btn" id="zoom-in-btn">+</button>
         <button class="btn" id="refresh-btn">Refresh</button>
       </div>
       <div id="canvas-area">
@@ -737,13 +730,15 @@
       projectItem.onclick = () => openFile('project.xml');
       globalsSection.appendChild(projectItem);
 
-      // Add translations.xml if exists
-      const transItem = document.createElement('div');
-      transItem.className = 'tree-item';
-      transItem.dataset.path = 'translations.xml';
-      transItem.innerHTML = `<span class="icon">⚙</span>translations.xml`;
-      transItem.onclick = () => openFile('translations.xml');
-      globalsSection.appendChild(transItem);
+      // Add translations.xml only if exists
+      if (fileCache['translations.xml']) {
+        const transItem = document.createElement('div');
+        transItem.className = 'tree-item';
+        transItem.dataset.path = 'translations.xml';
+        transItem.innerHTML = `<span class="icon">⚙</span>translations.xml`;
+        transItem.onclick = () => openFile('translations.xml');
+        globalsSection.appendChild(transItem);
+      }
 
       tree.appendChild(globalsSection);
     }
@@ -1254,9 +1249,7 @@
     document.getElementById('log-clear').addEventListener('click', clearLog);
     document.getElementById('save-btn').addEventListener('click', saveCurrentFile);
     document.getElementById('compile-btn').addEventListener('click', compileProject);
-    document.getElementById('zoom-out-btn').addEventListener('click', zoomOut);
-    document.getElementById('zoom-reset-btn').addEventListener('click', resetZoom);
-    document.getElementById('zoom-in-btn').addEventListener('click', zoomIn);
+    // Zoom buttons removed
     document.getElementById('refresh-btn').addEventListener('click', refreshPreview);
     document.getElementById('screen-select').addEventListener('change', (e) => loadScreen(e.target.value));
 
@@ -1372,7 +1365,6 @@
     function updateZoom() {
       const wrap = document.getElementById('canvas-wrap');
       wrap.style.transform = `scale(${zoomScale})`;
-      document.getElementById('zoom-level').textContent = Math.round(zoomScale * 100) + '%';
     }
 
     function zoomIn() {

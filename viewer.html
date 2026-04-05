@@ -892,7 +892,11 @@
         log('Loading WASM for project: ' + PROJECT_PATH, 'info');
         Module = await createModule({
           canvas,
-          locateFile: f => 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now(),
+          locateFile: f => {
+            const url = 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now();
+            log('Loading: ' + url, 'info');
+            return url;
+          },
           print: msg => { if (msg.includes('[Warn]')) log(msg, 'warn'); else log(msg); },
           printErr: msg => log(msg, 'warn'),
         });
@@ -944,16 +948,7 @@
       if (!initSuccess) {
         log(`${baseName}_init: not found`, 'warn');
       }
-
-      // Set default language after project init
-      try {
-        Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
-        log('Language set: en', 'ok');
-      } catch(e) {
-        log('Language set error: ' + e.message, 'warn');
-      }
-
-      // Load globals via WASM
+// Load globals via WASM
       try {
         let globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
         globalsXml = globalsXml.replace(/<!--[\s\S]*?-->/g, '');
@@ -967,18 +962,15 @@
         log('Globals WASM error: ' + e.message, 'warn');
       }
 
-      // Load translations via WASM - write to VFS first like online viewer
+      // Load translations via WASM
       try {
         const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
         if (transXml) {
-          // Write to VFS at A:/translations.xml
-          fsWriteText('/translations.xml', transXml);
-          // Load from file path (like online viewer)
-          Module.ccall('lvrt_xml_load_translations', 'number', ['string'], ['A:/translations.xml']);
-          log('Translations A:/translations.xml registered', 'ok');
-          // Set language after loading translations
+          Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
+          log('Translations loaded', 'ok');
+          // Set default language to 'en'
           Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
-          log('Language set: en', 'ok');
+          log('Language set to: en', 'ok');
         }
       } catch(e) {
         // translations.xml is optional
@@ -1052,8 +1044,7 @@
         try {
           const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
           if (transXml) {
-            fsWriteText('/translations.xml', transXml);
-            Module.ccall('lvrt_xml_load_translations', 'number', ['string'], ['A:/translations.xml']);
+            Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
             log('Translations reloaded', 'ok');
           }
         } catch(e) {
@@ -1079,9 +1070,29 @@
 
         let ret;
         if (isScreen) {
-          // Screen: just load directly without registering as components
+          // Screen: register all screens first for multi-screen navigation
           const name = filePath.replace('screens/', '').replace('.xml', '');
           
+          // Fetch and register all screens
+          const screens = await fetchJson('screens');
+          for (const screenName of screens) {
+            const screenPath = `screens/${screenName}.xml`;
+            const screenXml = applyGlobals(fileCache[screenPath] || await fetchText(screenPath));
+            Module.ccall('lvrt_xml_load_component_data', 'number',
+              ['string', 'string'], [screenName, screenXml]);
+          }
+          
+          // Create permanent screens
+          for (const screenName of screens) {
+            const screenPath = `screens/${screenName}.xml`;
+            const screenXml = fileCache[screenPath] || await fetchText(screenPath);
+            if (screenXml.includes('permanent="true"')) {
+              Module.ccall('lvrt_component_create', 'number',
+                ['string', 'string'], [screenName, '']);
+            }
+          }
+          
+          // Now load the target screen
           ret = Module.ccall('lvrt_process_data', 'number',
             ['string', 'string', 'number', 'string', 'string'],
             [xmlToRender, name, 0, 'screen', '']);

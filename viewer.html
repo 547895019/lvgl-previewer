@@ -949,6 +949,20 @@
         log('Globals WASM error: ' + e.message, 'warn');
       }
 
+      // Load translations via WASM
+      try {
+        const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
+        if (transXml) {
+          Module.ccall('lvrt_xml_load_translations', 'number', ['string'], [transXml]);
+          log('Translations loaded', 'ok');
+          // Set default language to 'en'
+          Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
+          log('Language set to: en', 'ok');
+        }
+      } catch(e) {
+        // translations.xml is optional
+      }
+
       runtimeReady = true;
       setOverlay(null);
 
@@ -1012,6 +1026,16 @@
           log('Globals reloaded', 'ok');
         } catch(e) {
           log('Globals reload error: ' + e.message, 'warn');
+        }
+        // Also reload translations
+        try {
+          const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
+          if (transXml) {
+            Module.ccall('lvrt_xml_load_translations', 'number', ['string'], [transXml]);
+            log('Translations reloaded', 'ok');
+          }
+        } catch(e) {
+          // translations.xml is optional
         }
         return;
       }

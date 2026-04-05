@@ -918,6 +918,9 @@
         const ret = Module.ccall('lvrt_initialize', 'number', ['string'], ['#canvas']);
         if (ret !== 0) throw new Error('lvrt_initialize returned ' + ret);
         log('LVGL initialized', 'ok');
+        // Set default language early
+        Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
+        log('Default language set: en', 'ok');
       } catch(e) {
         setOverlay('Init failed');
         log('Init error: ' + e.message, 'err');
@@ -964,9 +967,9 @@
         if (transXml) {
           Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
           log('Translations loaded', 'ok');
-          // Set default language to 'en'
+          // Re-set language after loading translations
           Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
-          log('Language set to: en', 'ok');
+          log('Language re-set: en', 'ok');
         }
       } catch(e) {
         // translations.xml is optional

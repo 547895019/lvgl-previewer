@@ -953,7 +953,7 @@
       try {
         const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
         if (transXml) {
-          Module.ccall('lvrt_xml_load_translations', 'number', ['string'], [transXml]);
+          Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
           log('Translations loaded', 'ok');
           // Set default language to 'en'
           Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
@@ -1031,7 +1031,7 @@
         try {
           const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
           if (transXml) {
-            Module.ccall('lvrt_xml_load_translations', 'number', ['string'], [transXml]);
+            Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
             log('Translations reloaded', 'ok');
           }
         } catch(e) {

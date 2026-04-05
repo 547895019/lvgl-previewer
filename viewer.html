@@ -961,15 +961,18 @@
         log('Globals WASM error: ' + e.message, 'warn');
       }
 
-      // Load translations via WASM
+      // Load translations via WASM - write to VFS first like online viewer
       try {
         const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
         if (transXml) {
-          Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
-          log('Translations loaded', 'ok');
-          // Re-set language after loading translations
+          // Write to VFS at A:/translations.xml
+          fsWriteText('/translations.xml', transXml);
+          // Load from file path (like online viewer)
+          Module.ccall('lvrt_xml_load_translations', 'number', ['string'], ['A:/translations.xml']);
+          log('Translations A:/translations.xml registered', 'ok');
+          // Set language after loading translations
           Module.ccall('lvrt_translation_set_language', 'number', ['string'], ['en']);
-          log('Language re-set: en', 'ok');
+          log('Language set: en', 'ok');
         }
       } catch(e) {
         // translations.xml is optional
@@ -1043,7 +1046,8 @@
         try {
           const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
           if (transXml) {
-            Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
+            fsWriteText('/translations.xml', transXml);
+            Module.ccall('lvrt_xml_load_translations', 'number', ['string'], ['A:/translations.xml']);
             log('Translations reloaded', 'ok');
           }
         } catch(e) {

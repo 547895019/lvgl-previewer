@@ -441,7 +441,7 @@
   <div id="log-panel">
     <div id="log-header">
       <span>Console</span>
-      <button id="log-clear" onclick="clearLog()">Clear</button>
+      <button id="log-clear">Clear</button>
     </div>
     <div id="log"></div>
   </div>
@@ -1183,6 +1183,9 @@
     function clearLog() {
       document.getElementById('log').innerHTML = '';
     }
+    
+    // Attach event listener for clear log button
+    document.getElementById('log-clear').addEventListener('click', clearLog);
 
     // Zoom functionality
     let zoomScale = 1.0;

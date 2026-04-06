@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>LVGL Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d1117;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #canvas-wrap {
+      position: relative;
+      display: inline-block;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0d1117cc;
+      color: #8b949e;
+      font-family: monospace;
+      font-size: 13px;
+    }
+  </style>
+  <script>
+    const _origLog = console.log;
+    console.log = function(...args) {
+      const msg = typeof args[0] === 'string' ? args[0] : '';
+      if (msg.includes('lvrt_initialize: Using Canvas')) return;
+      _origLog.apply(console, args);
+    };
+
+    // Dynamically load project-specific WASM runtime
+    const params = new URLSearchParams(window.location.search);
+    const PROJECT_PATH = params.get('project') || '';
+    const runtimeScript = document.createElement('script');
+    runtimeScript.src = 'preview-bin/lved-runtime.js?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now();
+    document.head.appendChild(runtimeScript);
+  </script>
+</head>
+<body>
+
+  <div id="canvas-wrap">
+    <canvas id="canvas" width="320" height="240"></canvas>
+    <div id="overlay">Loading...</div>
+  </div>
+
+  <script>
+    const FILE_PATH = params.get('file') || '';
+    let PROJECT_NAME = 'project';
+    let PROJECT_WIDTH = 320;
+    let PROJECT_HEIGHT = 240;
+    let Module = null;
+    let fileCache = {};
+    let GLOBALS = {};
+
+    function setOverlay(msg) {
+      const el = document.getElementById('overlay');
+      if (msg) { el.textContent = msg; el.style.display = 'flex'; }
+      else { el.style.display = 'none'; }
+    }
+
+    async function fetchText(url) {
+      const r = await fetch(`/api/file?project=${encodeURIComponent(PROJECT_PATH)}&path=${encodeURIComponent(url)}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+      return r.text();
+    }
+
+    async function fetchTextOptional(url) {
+      const r = await fetch(`/api/file-exists?project=${encodeURIComponent(PROJECT_PATH)}&path=${encodeURIComponent(url)}`);
+      const check = await r.json();
+      if (!check.exists) return null;
+      return fetchText(url);
+    }
+
+    async function fetchBinary(url) {
+      const r = await fetch(`/api/file?project=${encodeURIComponent(PROJECT_PATH)}&path=${encodeURIComponent(url)}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+      return new Uint8Array(await r.arrayBuffer());
+    }
+
+    async function fetchJson(url) {
+      const r = await fetch(`/api/${url}?project=${encodeURIComponent(PROJECT_PATH)}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+      return r.json();
+    }
+
+    function fsWrite(path, data) {
+      try {
+        const dir = path.substring(0, path.lastIndexOf('/'));
+        if (dir) dir.split('/').reduce((acc, part) => {
+          if (!part) return acc;
+          const full = acc + '/' + part;
+          try { Module.FS.mkdir(full); } catch(e) {}
+          return full;
+        }, '');
+        Module.FS.writeFile(path, data);
+      } catch(e) {}
+    }
+
+    function parseAttr(tag, attr) {
+      const m = tag.match(new RegExp(`${attr}="([^"]+)"`));
+      return m ? m[1] : null;
+    }
+
+    function applyGlobals(xml) {
+      return xml.replace(/#([a-zA-Z_][a-zA-Z0-9_]*)/g, (match, name) =>
+        GLOBALS[name] !== undefined ? GLOBALS[name] : match
+      );
+    }
+
+    async function init() {
+      if (!PROJECT_PATH) { setOverlay('Missing ?project= parameter'); return; }
+
+      // Load project.xml
+      try {
+        const proj = await fetchText('project.xml');
+        const wm = proj.match(/width="(\d+)"/);
+        const hm = proj.match(/height="(\d+)"/);
+        const nm = proj.match(/name="([^"]+)"/);
+        if (wm) PROJECT_WIDTH = parseInt(wm[1]);
+        if (hm) PROJECT_HEIGHT = parseInt(hm[1]);
+        if (nm) PROJECT_NAME = nm[1];
+      } catch(e) {}
+
+      const canvas = document.getElementById('canvas');
+      canvas.width = PROJECT_WIDTH;
+      canvas.height = PROJECT_HEIGHT;
+
+      // Load globals
+      try {
+        const text = await fetchText('globals.xml');
+        fileCache['globals.xml'] = text;
+        for (const m of text.matchAll(/<(color|int|px)\s[^>]*\/>/g)) {
+          const name = parseAttr(m[0], 'name');
+          const val = parseAttr(m[0], 'value');
+          if (name && val) GLOBALS[name] = val;
+        }
+      } catch(e) {}
+
+      // Load translations
+      fileCache['translations.xml'] = await fetchTextOptional('translations.xml');
+
+      // Load WASM
+      setOverlay('Loading WASM...');
+      try {
+        Module = await createModule({
+          canvas,
+          locateFile: f => 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now(),
+          print: () => {},
+          printErr: () => {},
+        });
+      } catch(e) { setOverlay('WASM failed: ' + e.message); return; }
+
+      // Setup filesystem
+      try {
+        fsWrite('/globals.xml', fileCache['globals.xml'] || '');
+        const comps = await fetchJson('components');
+        for (const comp of comps) {
+          const xml = await fetchText(comp.path);
+          fileCache[comp.path] = xml;
+          fsWrite('/' + comp.path, xml);
+        }
+        const screens = await fetchJson('screens');
+        for (const name of screens) {
+          const path = `screens/${name}.xml`;
+          const xml = await fetchText(path);
+          fileCache[path] = xml;
+          fsWrite('/' + path, xml);
+        }
+        if (fileCache['translations.xml']) fsWrite('/translations.xml', fileCache['translations.xml']);
+        const assets = await fetchJson('assets');
+        for (const a of assets) {
+          const data = await fetchBinary(a.path);
+          fsWrite('/' + a.path, data);
+          fsWrite('A:' + a.path, data);
+        }
+      } catch(e) {}
+
+      // Initialize LVGL
+      setOverlay('Initializing...');
+      try {
+        Module.ccall('lvrt_initialize', 'number', ['string'], ['#canvas']);
+      } catch(e) { setOverlay('Init failed'); return; }
+
+      // Project init
+      const baseName = PROJECT_NAME.replace(/-/g, '_');
+      for (const fn of [baseName + '_init_gen', baseName + '_init']) {
+        try { Module.ccall(fn, 'void', ['string'], ['A:']); break; } catch(e) {}
+      }
+
+      // Register globals
+      try {
+        let gxml = fileCache['globals.xml'];
+        gxml = gxml.replace(/<!--[\s\S]*?-->/g, '');
+        gxml = gxml.replace(/src_path="([^"]*)"/g, 'src_path="A:$1"');
+        gxml = gxml.replace(/<data(\b[^>]*)>/g, '<file$1>');
+        gxml = gxml.replace(/<\/data>/g, '</file>');
+        gxml = gxml.replace(/(<globals[^>]*>)/, '$1\n<view/>');
+        Module.ccall('lvrt_xml_load_component_data', 'number', ['string', 'string'], ['globals', gxml]);
+      } catch(e) {}
+
+      // Register translations
+      if (fileCache['translations.xml']) {
+        Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [fileCache['translations.xml']]);
+      }
+
+      // Determine file to render
+      let filePath = FILE_PATH;
+      if (!filePath) {
+        const screens = await fetchJson('screens');
+        if (screens.length > 0) filePath = `screens/${screens[0]}.xml`;
+      }
+      if (!filePath) { setOverlay('No file to render'); return; }
+
+      // Render
+      await renderFile(filePath);
+    }
+
+    async function renderFile(filePath) {
+      const isScreen = filePath.startsWith('screens/');
+      const isComponent = filePath.startsWith('components/');
+
+      try {
+        // Register all components
+        const comps = await fetchJson('components');
+        for (const comp of comps) {
+          const xml = applyGlobals(fileCache[comp.path] || await fetchText(comp.path));
+          Module.ccall('lvrt_xml_load_component_data', 'number', ['string', 'string'], [comp.name, xml]);
+        }
+
+        let xmlToRender = fileCache[filePath] || await fetchText(filePath);
+        xmlToRender = applyGlobals(xmlToRender);
+
+        if (isScreen) {
+          const name = filePath.replace('screens/', '').replace('.xml', '');
+          const screens = await fetchJson('screens');
+          for (const sn of screens) {
+            const sp = `screens/${sn}.xml`;
+            const sx = applyGlobals(fileCache[sp] || await fetchText(sp));
+            Module.ccall('lvrt_xml_load_component_data', 'number', ['string', 'string'], [sn, sx]);
+          }
+          for (const sn of screens) {
+            const sp = `screens/${sn}.xml`;
+            const sx = fileCache[sp] || await fetchText(sp);
+            if (sx.includes('permanent="true"')) {
+              Module.ccall('lvrt_component_create', 'number', ['string', 'string'], [sn, '']);
+            }
+          }
+          Module.ccall('lvrt_process_data', 'number',
+            ['string', 'string', 'number', 'string', 'string'],
+            [xmlToRender, name, 0, 'screen', '']);
+        } else if (isComponent) {
+          const compName = filePath.replace('components/', '').replace(/\//g, '_').replace('.xml', '');
+          Module.ccall('lvrt_xml_load_component_data', 'number', ['string', 'string'], [compName, xmlToRender]);
+          Module.ccall('lvrt_process_data', 'number',
+            ['string', 'string', 'number', 'string', 'string'],
+            [xmlToRender, compName, 0, 'component', '']);
+        }
+
+        setOverlay(null);
+      } catch(e) {
+        setOverlay('Render error: ' + e.message);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

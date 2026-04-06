@@ -289,6 +289,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (pathname === '/preview.html') {
+    serveFile(res, path.join(ROOT, 'preview.html'));
+    return;
+  }
+
   // preview-bin files (WASM runtime)
   if (pathname.startsWith('/preview-bin/')) {
     const rel = pathname.slice('/preview-bin/'.length);

@@ -432,6 +432,79 @@
       color: #484f58;
       padding: 12px 0;
     }
+    #subject-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px 8px;
+      display: none;
+    }
+    #subject-panel .subject-header {
+      display: flex;
+      align-items: center;
+      padding: 6px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      position: sticky;
+      top: 0;
+      background: #0d1117;
+      z-index: 1;
+    }
+    #subject-panel .subject-header span:nth-child(1) { flex: 2; }
+    #subject-panel .subject-header span:nth-child(2) { flex: 1; }
+    #subject-panel .subject-header span:nth-child(3) { flex: 2; }
+    #subject-panel .subject-item {
+      display: flex;
+      align-items: center;
+      padding: 4px 8px;
+      border-bottom: 1px solid #21262d;
+    }
+    #subject-panel .subject-name {
+      flex: 2;
+      font-size: 11px;
+      color: #c9d1d9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #subject-panel .subject-type {
+      flex: 1;
+      font-size: 11px;
+      color: #8b949e;
+      font-family: 'Fira Code', monospace;
+    }
+    #subject-panel .subject-value {
+      flex: 2;
+    }
+    #subject-panel .subject-value input {
+      width: 100%;
+      font-size: 11px;
+      font-family: 'Fira Code', monospace;
+      color: #c9d1d9;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 4px;
+      padding: 3px 6px;
+      outline: none;
+    }
+    #subject-panel .subject-value input:focus {
+      border-color: #58a6ff;
+    }
+    #subject-panel .subject-value input::-webkit-inner-spin-button,
+    #subject-panel .subject-value input::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      appearance: none;
+      margin: 0;
+    }
+    #subject-panel .subject-value input[type="number"] {
+      -moz-appearance: textfield;
+    }
+    #subject-panel .subject-empty {
+      font-size: 11px;
+      color: #484f58;
+      padding: 12px 0;
+    }
     #log {
       flex: 1;
       overflow-y: auto;
@@ -471,6 +544,17 @@
       if (msg.includes('lvrt_initialize: Using Canvas')) return;
       _origConsoleLog.apply(console, args);
     };
+
+    // Intercept subject update messages from WASM runtime
+    // (js_dispatch_subject_event_* uses self.postMessage which becomes window.postMessage in main thread)
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'subject-update' && e.data.subject) {
+        const s = e.data.subject;
+        if (typeof onSubjectUpdate === 'function') {
+          onSubjectUpdate(s.name, s.type, s.value);
+        }
+      }
+    });
   </script>
 </head>
 <body>
@@ -535,11 +619,13 @@
       <div class="tab-group">
         <button class="tab active" id="tab-console">Console</button>
         <button class="tab" id="tab-animations">Animations</button>
+        <button class="tab" id="tab-subjects">Subjects</button>
       </div>
       <button id="log-clear">Clear</button>
     </div>
     <div id="log"></div>
     <div id="anim-panel"></div>
+    <div id="subject-panel"></div>
   </div>
 
   <script type="importmap">
@@ -730,6 +816,10 @@
 
       // Load globals
       await loadGlobals();
+
+      // Parse subjects from globals.xml and build UI
+      parseSubjectsFromGlobals();
+      updateSubjectsPanel();
 
       // Initialize WASM
       await initWASM();
@@ -961,7 +1051,29 @@
           if (name && src) IMAGES[name] = 'A:' + src;
         }
 
-        log(`Globals loaded: ${Object.keys(GLOBALS).length} consts, ${Object.keys(IMAGES).length} images`, 'ok');
+        // Load tiny_ttf fonts
+        for (const m of text.matchAll(/<tiny_ttf\s[^>]*\/>/g)) {
+          const name = parseAttr(m[0], 'name');
+          const src = parseAttr(m[0], 'src_path');
+          if (name && src) {
+            IMAGES[name] = 'A:' + src;
+            log(`Font loaded: ${name} -> ${src}`, 'info');
+          }
+        }
+
+        // Load bin fonts (as_file="true" means load compiled bin from fonts/{name})
+        // Note: bin tag can span multiple lines, use match with [\s\S]*? for multiline
+        const binMatches = text.match(/<bin\b[\s\S]*?\/>/g) || [];
+        for (const binTag of binMatches) {
+          const name = parseAttr(binTag, 'name');
+          const asFile = parseAttr(binTag, 'as_file');
+          if (!name || asFile !== 'true') continue;
+          const fontPath = `fonts/${name}`;
+          IMAGES[name] = 'A:' + fontPath;
+          log(`Font registered: ${name} -> ${fontPath}`, 'info');
+        }
+
+        log(`Globals loaded: ${Object.keys(GLOBALS).length} consts, ${Object.keys(IMAGES).length} images/fonts`, 'ok');
       } catch(e) {
         log('globals.xml load error: ' + e.message, 'warn');
       }
@@ -1047,7 +1159,18 @@
       try {
         let globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
         globalsXml = globalsXml.replace(/<!--[\s\S]*?-->/g, '');
-        globalsXml = globalsXml.replace(/src_path="([^"]*)"/g, 'src_path="A:$1"');
+        // Fix bin font paths: as_file="true" means load from fonts/{name}, add A: prefix
+        // Note: bin tag can span multiple lines, use [\s\S]*? for multiline matching
+        globalsXml = globalsXml.replace(/<bin\b[\s\S]*?as_file="true"[\s\S]*?\/>/g, (match) => {
+          const nameMatch = match.match(/name="([^"]+)"/);
+          if (nameMatch) {
+            const name = nameMatch[1];
+            return match.replace(/src_path="[^"]*"/, `src_path="A:fonts/${name}"`);
+          }
+          return match;
+        });
+        // Add A: prefix to remaining src_path (for images and tiny_ttf)
+        globalsXml = globalsXml.replace(/src_path="(?!A:)([^"]*)"/g, 'src_path="A:$1"');
         globalsXml = globalsXml.replace(/<data(\b[^>]*)>/g, '<file$1>');
         globalsXml = globalsXml.replace(/<\/data>/g, '</file>');
         globalsXml = globalsXml.replace(/(<globals[^>]*>)/, '$1\n<view/>');
@@ -1070,9 +1193,17 @@
       runtimeReady = true;
       setOverlay(null);
 
-      // Load first screen
-      const firstScreen = document.getElementById('screen-select').value;
-      if (firstScreen) loadScreen(firstScreen);
+      // Load initial file: use ?file= URL param, or default to first screen
+      const urlFile = urlParams.get('file');
+      if (urlFile) {
+        await openFile(urlFile);
+      } else {
+        const firstScreen = document.getElementById('screen-select').value;
+        if (firstScreen) await loadScreen(firstScreen);
+      }
+
+      // Subscribe to subject updates after first render
+      subscribeSubjects();
     }
 
     async function setupFilesystem() {
@@ -1098,6 +1229,20 @@
       // Write translations
       const transXml = fileCache['translations.xml'];
       if (transXml) fsWriteText('/translations.xml', transXml);
+
+      // Write fonts/images from IMAGES
+      log(`Writing ${Object.keys(IMAGES).length} assets to VFS...`, 'info');
+      for (const [name, path] of Object.entries(IMAGES)) {
+        const srcPath = path.replace(/^A:/, '');
+        log(`Writing asset: ${name} -> ${srcPath}`, 'info');
+        try {
+          const data = await fetchBinary(srcPath);
+          fsWriteBinary('A:' + srcPath, data);
+          log(`Loaded asset: ${srcPath} (${data.length} bytes)`, 'info');
+        } catch(e) {
+          log(`Failed to load asset: ${srcPath} - ${e.message}`, 'warn');
+        }
+      }
 
       // Write assets
       const assets = await fetchJson('assets');
@@ -1128,12 +1273,26 @@
           try {
             let globalsXml = fileCache['globals.xml'] || await fetchText('globals.xml');
             globalsXml = globalsXml.replace(/\u003c!--[\s\S]*?--\u003e/g, '');
-            globalsXml = globalsXml.replace(/src_path="([^"]*)"/g, 'src_path="A:$1"');
+            // Fix bin font paths: as_file="true" means load from fonts/{name}, add A: prefix
+            // Note: bin tag can span multiple lines, use [\s\S]*? for multiline matching
+            globalsXml = globalsXml.replace(/\u003cbin\b[\s\S]*?as_file="true"[\s\S]*?\/>/g, (match) => {
+              const nameMatch = match.match(/name="([^"]+)"/);
+              if (nameMatch) {
+                const name = nameMatch[1];
+                return match.replace(/src_path="[^"]*"/, `src_path="A:fonts/${name}"`);
+              }
+              return match;
+            });
+            // Add A: prefix to remaining src_path (for images and tiny_ttf)
+            globalsXml = globalsXml.replace(/src_path="(?!A:)([^"]*)"/g, 'src_path="A:$1"');
             globalsXml = globalsXml.replace(/\u003cdata(\b[^\u003e]*)\u003e/g, '\u003cfile$1\u003e');
             globalsXml = globalsXml.replace(/\u003c\/data\u003e/g, '\u003c/file\u003e');
             globalsXml = globalsXml.replace(/(\u003cglobals[^\u003e]*\u003e)/, '$1\n\u003cview/\u003e');
             Module.ccall('lvrt_xml_load_component_data', 'number', ['string', 'string'], ['globals', globalsXml]);
             log('Globals reloaded', 'ok');
+            // Re-parse subjects after globals change
+            parseSubjectsFromGlobals();
+            updateSubjectsPanel();
           } catch(e) {
             log('Globals reload error: ' + e.message, 'warn');
           }
@@ -1361,27 +1520,27 @@
       document.getElementById('log').innerHTML = '';
     }
     
-    // Tab switching (Console / Animations)
+    // Tab switching (Console / Animations / Subjects)
     function switchTab(tabName) {
-      const logEl = document.getElementById('log');
-      const animEl = document.getElementById('anim-panel');
-      const tabConsole = document.getElementById('tab-console');
-      const tabAnim = document.getElementById('tab-animations');
+      const panels = {
+        console: document.getElementById('log'),
+        animations: document.getElementById('anim-panel'),
+        subjects: document.getElementById('subject-panel'),
+      };
+      const tabs = {
+        console: document.getElementById('tab-console'),
+        animations: document.getElementById('tab-animations'),
+        subjects: document.getElementById('tab-subjects'),
+      };
       const clearBtn = document.getElementById('log-clear');
 
-      if (tabName === 'console') {
-        logEl.style.display = 'block';
-        animEl.style.display = 'none';
-        tabConsole.classList.add('active');
-        tabAnim.classList.remove('active');
-        clearBtn.style.display = '';
-      } else {
-        logEl.style.display = 'none';
-        animEl.style.display = 'block';
-        tabConsole.classList.remove('active');
-        tabAnim.classList.add('active');
-        clearBtn.style.display = 'none';
+      for (const [name, panel] of Object.entries(panels)) {
+        panel.style.display = name === tabName ? 'block' : 'none';
       }
+      for (const [name, tab] of Object.entries(tabs)) {
+        tab.classList.toggle('active', name === tabName);
+      }
+      clearBtn.style.display = tabName === 'console' ? '' : 'none';
     }
 
     // Parse animation timelines from current file's XML using DOMParser
@@ -1446,9 +1605,120 @@
       }
     }
 
+    // Subjects panel
+    let subjectDefs = []; // [{name, type, value, min_value, max_value}]
+
+    function parseSubjectsFromGlobals() {
+      const globalsXml = fileCache['globals.xml'];
+      if (!globalsXml) return;
+
+      subjectDefs = [];
+      try {
+        const doc = new DOMParser().parseFromString(globalsXml, 'text/xml');
+        for (const el of doc.querySelectorAll('subjects > *')) {
+          const name = el.getAttribute('name') || '';
+          const type = el.tagName; // int, string, float
+          const value = el.getAttribute('value') || '';
+          const min_value = el.getAttribute('min_value') || '';
+          const max_value = el.getAttribute('max_value') || '';
+          if (name) {
+            subjectDefs.push({ name, type, value, min_value, max_value });
+          }
+        }
+      } catch(e) {}
+    }
+
+    function updateSubjectsPanel() {
+      const panel = document.getElementById('subject-panel');
+      panel.innerHTML = '';
+
+      if (subjectDefs.length === 0) {
+        panel.innerHTML = '<div class="subject-empty">No subjects defined in globals.xml</div>';
+        return;
+      }
+
+      // Header row
+      const header = document.createElement('div');
+      header.className = 'subject-header';
+      header.innerHTML = '<span>Name</span><span>Type</span><span>Value</span>';
+      panel.appendChild(header);
+
+      for (const subj of subjectDefs) {
+        const item = document.createElement('div');
+        item.className = 'subject-item';
+        item.dataset.name = subj.name;
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'subject-name';
+        nameEl.textContent = subj.name;
+
+        const typeEl = document.createElement('span');
+        typeEl.className = 'subject-type';
+        typeEl.textContent = subj.type;
+
+        const valueWrap = document.createElement('span');
+        valueWrap.className = 'subject-value';
+        const input = document.createElement('input');
+        input.type = subj.type === 'string' ? 'text' : 'number';
+        input.value = subj.value;
+        if (subj.type === 'float') input.step = '0.1';
+        else if (subj.type === 'int') input.step = '1';
+        if (subj.min_value !== '') input.min = subj.min_value;
+        if (subj.max_value !== '') input.max = subj.max_value;
+        input.addEventListener('change', () => setSubjectValue(subj.name, subj.type, input.value));
+        valueWrap.appendChild(input);
+
+        item.appendChild(nameEl);
+        item.appendChild(typeEl);
+        item.appendChild(valueWrap);
+        panel.appendChild(item);
+      }
+    }
+
+    function setSubjectValue(name, type, value) {
+      if (!runtimeReady || !Module) return;
+      try {
+        if (type === 'int') {
+          Module.ccall('lvrt_set_subject_int', null, ['string', 'number'], [name, parseInt(value) || 0]);
+        } else if (type === 'float') {
+          Module.ccall('lvrt_set_subject_float', null, ['string', 'number'], [name, parseFloat(value) || 0]);
+        } else {
+          Module.ccall('lvrt_set_subject_string', null, ['string', 'string'], [name, String(value)]);
+        }
+        Module.ccall('lvrt_refresh', 'void', [], []);
+      } catch(e) {
+        log(`Error setting subject "${name}": ${e.message}`, 'err');
+      }
+    }
+
+    function subscribeSubjects() {
+      if (!runtimeReady || !Module) return;
+      for (const subj of subjectDefs) {
+        try {
+          Module.ccall('lvrt_subscribe_subject', 'boolean', ['string'], [subj.name]);
+        } catch(e) {}
+      }
+    }
+
+    // Handle WASM-to-JS subject updates (override js_dispatch_subject_event_* functions)
+    function onSubjectUpdate(name, type, value) {
+      const subj = subjectDefs.find(s => s.name === name);
+      if (subj) subj.value = String(value);
+      // Update input if visible
+      const panel = document.getElementById('subject-panel');
+      const item = panel.querySelector(`.subject-item[data-name="${name}"]`);
+      if (item) {
+        const input = item.querySelector('input');
+        if (input && document.activeElement !== input) {
+          input.value = value;
+        }
+      }
+    }
+
     // Attach event listeners
     document.getElementById('tab-console').addEventListener('click', () => switchTab('console'));
     document.getElementById('tab-animations').addEventListener('click', () => switchTab('animations'));
+    document.getElementById('tab-subjects').addEventListener('click', () => switchTab('subjects'));
     document.getElementById('log-clear').addEventListener('click', clearLog);
     document.getElementById('save-btn').addEventListener('click', saveCurrentFile);
     document.getElementById('compile-btn').addEventListener('click', compileProject);

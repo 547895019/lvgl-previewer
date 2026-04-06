@@ -247,6 +247,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (pathname === '/api/file-exists') {
+    if (!projectRoot || !query.path) {
+      res.writeHead(400, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+      res.end('{"exists":false}');
+      return;
+    }
+    const filePath = path.join(projectRoot, path.normalize(query.path));
+    const exists = fs.existsSync(filePath) && fs.statSync(filePath).isFile();
+    res.writeHead(200, { 'Content-Type': 'application/json', ...SECURITY_HEADERS });
+    res.end(JSON.stringify({ exists }));
+    return;
+  }
+
   if (pathname === '/api/file') {
     if (!projectRoot || !query.path) {
       res.writeHead(400, { 'Content-Type': 'text/plain' });

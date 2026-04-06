@@ -806,7 +806,7 @@
 
       // Check and add translations.xml only if exists
       try {
-        const transXml = await fetchText('translations.xml');
+        const transXml = await fetchTextOptional('translations.xml');
         if (transXml) {
           fileCache['translations.xml'] = transXml;
           const transItem = document.createElement('div');
@@ -832,7 +832,8 @@
           }
         }
       } catch(e) {
-        // translations.xml is optional, ignore if not found
+        // translations.xml is optional — mark as checked to avoid repeated 404s
+        fileCache['translations.xml'] = null;
       }
 
       tree.appendChild(globalsSection);
@@ -1060,14 +1061,10 @@
       // Note: do NOT call lvrt_translation_set_language here — it calls lv_xml_create("thisview")
       // internally for live language switching, but "thisview" is not registered yet at this point.
       // Language is passed as the 5th arg of lvrt_process_data instead.
-      try {
-        const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
-        if (transXml) {
-          Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
-          log('Translations loaded', 'ok');
-        }
-      } catch(e) {
-        log('Translations error: ' + e.message, 'warn');
+      const transXml = fileCache['translations.xml'];
+      if (transXml) {
+        Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
+        log('Translations loaded', 'ok');
       }
 
       runtimeReady = true;
@@ -1099,10 +1096,8 @@
       }
 
       // Write translations
-      try {
-        const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
-        if (transXml) fsWriteText('/translations.xml', transXml);
-      } catch(e) {}
+      const transXml = fileCache['translations.xml'];
+      if (transXml) fsWriteText('/translations.xml', transXml);
 
       // Write assets
       const assets = await fetchJson('assets');
@@ -1145,14 +1140,12 @@
         }
         // Reload translations
         try {
-          const transXml = fileCache['translations.xml'] || await fetchText('translations.xml');
+          const transXml = fileCache['translations.xml'];
           if (transXml) {
             Module.ccall('lvrt_xml_load_translations_data', 'number', ['string'], [transXml]);
             log('Translations reloaded', 'ok');
           }
-        } catch(e) {
-          log('Translations reload error: ' + e.message, 'warn');
-        }
+        } catch(e) {}
         // Re-render current screen
         const current = document.getElementById('screen-select').value;
         if (current) loadScreen(current);
@@ -1286,6 +1279,13 @@
       const r = await fetch(fullUrl);
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
       return r.text();
+    }
+
+    async function fetchTextOptional(url) {
+      const checkUrl = `/api/file-exists?project=${encodeURIComponent(PROJECT_PATH)}&path=${encodeURIComponent(url)}`;
+      const check = await (await fetch(checkUrl)).json();
+      if (!check.exists) return null;
+      return fetchText(url);
     }
 
     async function fetchBinary(url) {

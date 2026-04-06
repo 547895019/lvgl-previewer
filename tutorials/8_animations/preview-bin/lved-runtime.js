@@ -8561,7 +8561,7 @@ for (/**@suppress{duplicate}*/ var i = 0; i <= 288; ++i) {
 
 // End JS library code
 var ASM_CONSTS = {
-  157788: $0 => {
+  158498: $0 => {
     var str = UTF8ToString($0) + "\n\n" + "Abort/Retry/Ignore/AlwaysIgnore? [ariA] :";
     var reply = window.prompt(str, "i");
     if (reply === null) {
@@ -8569,7 +8569,7 @@ var ASM_CONSTS = {
     }
     return allocate(intArrayFromString(reply), "i8", ALLOC_NORMAL);
   },
-  158013: () => {
+  158723: () => {
     if (typeof (AudioContext) !== "undefined") {
       return true;
     } else if (typeof (webkitAudioContext) !== "undefined") {
@@ -8577,7 +8577,7 @@ var ASM_CONSTS = {
     }
     return false;
   },
-  158160: () => {
+  158870: () => {
     if ((typeof (navigator.mediaDevices) !== "undefined") && (typeof (navigator.mediaDevices.getUserMedia) !== "undefined")) {
       return true;
     } else if (typeof (navigator.webkitGetUserMedia) !== "undefined") {
@@ -8585,7 +8585,7 @@ var ASM_CONSTS = {
     }
     return false;
   },
-  158394: $0 => {
+  159104: $0 => {
     if (typeof (Module["SDL2"]) === "undefined") {
       Module["SDL2"] = {};
     }
@@ -8609,11 +8609,11 @@ var ASM_CONSTS = {
     }
     return SDL2.audioContext === undefined ? -1 : 0;
   },
-  158946: () => {
+  159656: () => {
     var SDL2 = Module["SDL2"];
     return SDL2.audioContext.sampleRate;
   },
-  159014: ($0, $1, $2, $3) => {
+  159724: ($0, $1, $2, $3) => {
     var SDL2 = Module["SDL2"];
     var have_microphone = function(stream) {
       if (SDL2.capture.silenceTimer !== undefined) {
@@ -8655,7 +8655,7 @@ var ASM_CONSTS = {
       }, have_microphone, no_microphone);
     }
   },
-  160707: ($0, $1, $2, $3) => {
+  161417: ($0, $1, $2, $3) => {
     var SDL2 = Module["SDL2"];
     SDL2.audio.scriptProcessorNode = SDL2.audioContext["createScriptProcessor"]($1, 0, $0);
     SDL2.audio.scriptProcessorNode["onaudioprocess"] = function(e) {
@@ -8687,7 +8687,7 @@ var ASM_CONSTS = {
       SDL2.audio.silenceTimer = setInterval(silence_callback, ($1 / SDL2.audioContext.sampleRate) * 1e3);
     }
   },
-  161882: ($0, $1) => {
+  162592: ($0, $1) => {
     var SDL2 = Module["SDL2"];
     var numChannels = SDL2.capture.currentCaptureBuffer.numberOfChannels;
     for (var c = 0; c < numChannels; ++c) {
@@ -8706,7 +8706,7 @@ var ASM_CONSTS = {
       }
     }
   },
-  162487: ($0, $1) => {
+  163197: ($0, $1) => {
     var SDL2 = Module["SDL2"];
     var buf = $0 >>> 2;
     var numChannels = SDL2.audio.currentOutputBuffer["numberOfChannels"];
@@ -8720,7 +8720,7 @@ var ASM_CONSTS = {
       }
     }
   },
-  162976: $0 => {
+  163686: $0 => {
     var SDL2 = Module["SDL2"];
     if ($0) {
       if (SDL2.capture.silenceTimer !== undefined) {
@@ -8754,7 +8754,7 @@ var ASM_CONSTS = {
       SDL2.audioContext = undefined;
     }
   },
-  163982: ($0, $1, $2) => {
+  164692: ($0, $1, $2) => {
     var w = $0;
     var h = $1;
     var pixels = $2;
@@ -8825,7 +8825,7 @@ var ASM_CONSTS = {
     }
     SDL2.ctx.putImageData(SDL2.image, 0, 0);
   },
-  165450: ($0, $1, $2, $3, $4) => {
+  166160: ($0, $1, $2, $3, $4) => {
     var w = $0;
     var h = $1;
     var hot_x = $2;
@@ -8862,18 +8862,18 @@ var ASM_CONSTS = {
     stringToUTF8(url, urlBuf, url.length + 1);
     return urlBuf;
   },
-  166438: $0 => {
+  167148: $0 => {
     if (Module["canvas"]) {
       Module["canvas"].style["cursor"] = UTF8ToString($0);
     }
   },
-  166521: () => {
+  167231: () => {
     if (Module["canvas"]) {
       Module["canvas"].style["cursor"] = "none";
     }
   },
-  166590: () => window.innerWidth,
-  166620: () => window.innerHeight
+  167300: () => window.innerWidth,
+  167330: () => window.innerHeight
 };
 
 function emscripten_getrandom(buf, buflen) {
@@ -8896,6 +8896,17 @@ function js_log_callback(message) {
   if (typeof process !== "undefined") {
     console.log("[LVGL]" + UTF8ToString(message));
   }
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "lvgl-log",
+      message: UTF8ToString(message)
+    });
+  }
+}
+
+function js_lvgl_assertion_failure_callback() {
+  console.warn("Preview has stopped due to an assertion failure in LVGL");
+  throw new Error("LVGL assertion failure - see previous logs for details");
 }
 
 function js_xml_is_rendered() {
@@ -8905,34 +8916,40 @@ function js_xml_is_rendered() {
 }
 
 function js_dispatch_subject_event_int(name, value) {
-  if (typeof window !== "undefined" && window.previewStore) {
-    const {setSubject} = window.previewStore.getState();
-    setSubject({
-      name: UTF8ToString(name),
-      type: "int",
-      value
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "subject-update",
+      subject: {
+        name: UTF8ToString(name),
+        type: "int",
+        value
+      }
     });
   }
 }
 
 function js_dispatch_subject_event_string(name, value) {
-  if (typeof window !== "undefined" && window.previewStore) {
-    const {setSubject} = window.previewStore.getState();
-    setSubject({
-      name: UTF8ToString(name),
-      type: "string",
-      value: UTF8ToString(value)
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "subject-update",
+      subject: {
+        name: UTF8ToString(name),
+        type: "string",
+        value: UTF8ToString(value)
+      }
     });
   }
 }
 
 function js_dispatch_subject_event_float(name, value) {
-  if (typeof window !== "undefined" && window.previewStore) {
-    const {setSubject} = window.previewStore.getState();
-    setSubject({
-      name: UTF8ToString(name),
-      type: "float",
-      value
+  if (typeof self !== "undefined" && self.postMessage) {
+    self.postMessage({
+      type: "subject-update",
+      subject: {
+        name: UTF8ToString(name),
+        type: "float",
+        value
+      }
     });
   }
 }
@@ -9189,6 +9206,7 @@ var wasmImports = {
   /** @export */ js_dispatch_subject_event_int,
   /** @export */ js_dispatch_subject_event_string,
   /** @export */ js_log_callback,
+  /** @export */ js_lvgl_assertion_failure_callback,
   /** @export */ js_xml_is_rendered
 };
 

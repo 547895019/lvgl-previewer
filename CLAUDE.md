@@ -15,7 +15,7 @@
 3. 调用项目初始化函数 `{projectName}_init('A:')` 注册字体、图片等资源
 4. 通过 WASM trick 加载 globals（注入 `<view/>` 到 `<globals>` 根）
 5. 注册所有 components：`lvrt_xml_load_component_data(name, xml)`
-6. 渲染 screen：`lvrt_process_data(xml, name, 0, 'screen', '')`
+6. 渲染 screen：`lvrt_process_data(xml, name, 0, 'screen', language)`（第 5 参数必须传语言，否则内部会调用 `lv_translation_set_language('')` 清空语言）
 
 **注意**：LVGL VFS 驱动器是 `A:`，不是 `/`。Emscripten 会将 `A:` 映射到 `/`。
 
@@ -156,13 +156,104 @@ grep 'wasmExports\[".*_init"\]' preview-bin/lved-runtime.js
 - `viewer.html`: `locateFile: f => 'preview-bin/' + f + '?project=' + encodeURIComponent(PROJECT_PATH) + '&t=' + Date.now()`
 - `server.js`: 新增 `serveFileWithNoCache()` 函数用于 preview-bin 文件
 
-### translations.xml 支持
+### translations.xml 支持与语言设置
 
-**现象**：加载带翻译的项目时出现警告 `lv_translation_get: \`\` language is not found`
+**现象**：加载带翻译的项目时出现警告 `lv_translation_get: `` language is not found, using the 'dog' as translation.`
+
+**根本原因**：`lvrt_process_data` 的函数签名是：
+```c
+int lvrt_process_data(const char *xml_definition, const char *name,
+                      const char *display_style[], const char *xml_type,
+                      const char *language);
+```
+第 5 个参数 `language` 在内部直接调用 `lv_translation_set_language(language)`。我们一直传的是空字符串 `''`，导致每次渲染前语言都被重置为空。
 
 **解决**：
-1. 在 `initWASM()` 中加载 `translations.xml` 并调用 `lvrt_xml_load_translations_data`
-2. 设置默认语言 `lvrt_translation_set_language('en')`
-3. 在文件树 Configuration 部分添加 `translations.xml` 条目
-4. 点击 `globals.xml` 时同时重新加载 translations
+1. 在文件树 Configuration 部分添加 `translations.xml` 条目
+2. 在 `initWASM()` 中加载 `translations.xml`，调用 `lvrt_xml_load_translations_data` 和 `lvrt_xml_load_translations`（文件路径版）
+3. 从 `translations.xml` 的 `languages="en de"` 属性解析可用语言，在工具栏添加语言选择下拉框
+4. **关键修复**：调用 `lvrt_process_data` 时将所选语言作为第 5 个参数传入：
+```javascript
+const lang = document.getElementById('lang-select').value || '';
+Module.ccall('lvrt_process_data', 'number',
+  ['string', 'string', 'number', 'string', 'string'],
+  [xmlToRender, name, 0, 'screen', lang]);  // ← 第5个参数传语言
+```
+
+**注意**：**不能**单独调用 `lvrt_translation_set_language`，它在 `runtime.c` 中的实现是：
+```c
+void lvrt_translation_set_language(const char *language) {
+  lv_translation_set_language(language);
+  lv_obj_clean(screen);
+  lv_xml_create(screen, "thisview", NULL);  // 用于运行时动态切换语言
+}
+```
+在初始化阶段（screen 未加载时）调用它会触发 `lv_xml_create("thisview")` 但 "thisview" 尚未注册，导致警告 `lv_xml_create: 'thisview' is not a known widget`。语言通过 `lvrt_process_data` 第 5 参数传入即可。
+
+**注意**：`lvrt_xml_load_translations_data` 和 `lvrt_xml_load_translations` 返回 `0` 表示 `LV_RESULT_INVALID`（失败），返回 `1` 表示 `LV_RESULT_OK`（成功）。
+
+**注意**：`extract_view_content()` 在 `lv_xml_component.c` 中通过查找 `<view` 字符串提取组件视图内容。**不能**把 XML 中的 `<view>` 替换为 `<lv_obj>`，否则会导致 `Failed to extract view content` 错误，渲染完全失败。
+
+**加载序列更新**（第 6 步）：
+```
+6. 渲染 screen：lvrt_process_data(xml, name, 0, 'screen', language)
+                                                              ↑ 必须传语言
+```
+
+### Animations 面板与组件预览
+
+**功能**：在底部面板添加 Console / Animations 标签页，从当前预览文件的 XML 中解析 `<animations>` 下的 `<timeline>` 元素，显示 Play 按钮。
+
+**解析方式**（与在线预览器一致）：
+```javascript
+const doc = new DOMParser().parseFromString(xmlContent, 'text/xml');
+for (const el of doc.querySelectorAll('animations > *')) {
+  const name = el.getAttribute('name');
+  // ...
+}
+```
+
+**播放方式**（与在线预览器一致）：
+```javascript
+Module.ccall('lvrt_play_timeline', 'boolean', ['string'], [timelineName]);
+Module.ccall('lvrt_refresh', 'void', [], []);
+```
+
+**`lvrt_play_timeline` 内部机制**（`runtime.c:621`）：
+```c
+bool lvrt_play_timeline(const char * timeline_name) {
+    lv_obj_t * target = lv_obj_find_by_name(lv_screen_active(), "thisview_0");
+    if(target == NULL) target = lv_screen_active();
+    
+    lv_anim_timeline_t ** timeline_array = NULL;
+    lv_obj_send_event(target, lv_event_xml_store_timeline, &timeline_array);
+    // 在 thisview_0 上查找 timeline...
+}
+```
+关键：`lvrt_play_timeline` 在 `thisview_0` 对象上查找 timelines。
+
+**组件预览的关键问题**：
+
+**现象**：组件内定义的 timeline（如 `show_up`、`list_open`）点击 Play 报错 `No timelines are found`。
+
+**原因**：之前组件预览使用 `<view>` 包装器：
+```javascript
+// 错误做法 — thisview_0 是 <view> 包装器，没有 animations
+const previewXml = `<view>\n  <${compName} />\n</view>`;
+Module.ccall('lvrt_process_data', ..., [previewXml, 'preview', 0, 'screen', lang]);
+```
+`lvrt_process_data` 将 `previewXml` 注册为 "thisview"，所以 `thisview_0` 是 `<view>` 包装器，它没有 `<animations>` 定义。实际组件的 animations 在包装器的子对象上，`lvrt_play_timeline` 找不到。
+
+**解决**：将组件 XML 直接传给 `lvrt_process_data`，让 "thisview" 就是组件本身：
+```javascript
+// 正确做法 — thisview_0 就是组件，带有 animations
+Module.ccall('lvrt_xml_load_component_data', 'number',
+  ['string', 'string'], [compName, xmlToRender]);
+Module.ccall('lvrt_process_data', 'number',
+  ['string', 'string', 'number', 'string', 'string'],
+  [xmlToRender, compName, 0, 'component', lang]);
+```
+这样 `thisview_0` 就是组件实例，`lvrt_play_timeline` 可以在其上找��� timeline。
+
+**注意**：Animations 面板只显示当前预览文件的 timelines（与在线预览器行为一致），按字母排序。
 
